@@ -1,0 +1,28 @@
+struct string_info {
+   u32 offset;
+   u32 flags;
+};
+
+struct strings {
+   u32 nmemb;
+   struct string_info info[nmemb];
+};
+
+struct item {
+   u32 id;
+   u16 flags;
+   u16 stack;
+   u16 type;
+   u16 resource;
+   u16 targets;
+
+   union data (type) {
+      4  => struct weapon weapon;
+      5  => struct armor armor;
+      7  => struct usable usable;
+      12 => struct puppet puppet;
+      *  => struct general general;
+   };
+
+   struct strings strings;
+};

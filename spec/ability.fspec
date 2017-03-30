@@ -1,0 +1,11 @@
+// Abilities
+struct ability {
+   u16 index;
+   u16 icon_id;
+   u16 mp_cost;
+   u16 unknown;
+   u16 targets;
+   u8 name[32] = sjis; // The kind actually depends on ROM section
+   u8 description[256] = sjis; // ^ Ditto, we probably can't express this
+   u8 padding[726] = pad;
+};

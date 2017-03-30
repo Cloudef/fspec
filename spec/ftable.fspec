@@ -1,0 +1,3 @@
+struct ftable {
+   u16 id;
+};

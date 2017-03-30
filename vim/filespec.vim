@@ -1,0 +1,56 @@
+" Vim syntax file
+" Language: Filespec
+" Author: Jari Vetoniemi
+
+syntax clear
+
+syn match	fsBadContinuation contained "\\\s\+$"
+syn keyword	fsTodo		contained TODO FIXME XXX
+syn cluster	fsCommentGroup	contains=fsTodo,fsBadContinuation
+syn region	fsComment	start="//" skip="\\$" end="$" keepend contains=@fsCommentGroup,@Spell
+
+syn keyword	fsStructure	struct union
+syn keyword	fsType		s8 s16 s32 s64
+syn keyword	fsType		u8 u16 u32 u64
+syn keyword	fsKind          ascii utf8 sjis pad hex
+
+syn case ignore
+syn match	fsNumbers	display transparent "\<\d\|\.\d" contains=fsNumber,fsFloat,fsOctalError,fsOctal
+syn match	fsNumbersCom	display contained transparent "\<\d\|\.\d" contains=fsNumber,fsFloat,fsOctal
+syn match	fsNumber	display contained "\d\+\(u\=l\{0,2}\|ll\=u\)\>"
+syn match	fsNumber	display contained "0x\x\+\(u\=l\{0,2}\|ll\=u\)\>"
+syn match	fsOctal		display contained "0\o\+\(u\=l\{0,2}\|ll\=u\)\>" contains=fsOctalZero
+syn match	fsOctalZero	display contained "\<0"
+syn match	fsFloat		display contained "\d\+f"
+syn match	fsFloat		display contained "\d\+\.\d*\(e[-+]\=\d\+\)\=[fl]\="
+syn match	fsFloat		display contained "\.\d\+\(e[-+]\=\d\+\)\=[fl]\=\>"
+syn match	fsFloat		display contained "\d\+e[-+]\=\d\+[fl]\=\>"
+syn match	fsOctalError	display contained "0\o*[89]\d*"
+syn case match
+
+syn match	fsSpecial	display contained "\\\(x\x\+\|\o\{1,3}\|.\|$\)"
+syn region	fsString	start=+"+ skip=+\\\\\|\\"+ end=+"+ contains=fsSpecial,@Spell extend
+syn match	fsCharacter	"'[^']*'" contains=fsSpecial
+
+syn match       fsBlock          "[{}]"
+syn match       fsBracket        "[\[\]]"
+syn match       fsOperator       display "[-+&|<>=!*\/~.,;:%&^?()]" contains=fsComment,fsKind
+
+" Define the default highlighting.
+" Only used when an item doesn't have highlighting yet
+hi def link fsTodo		Todo
+hi def link fsComment		Comment
+hi def link fsStructure		Structure
+hi def link fsType		Type
+hi def link fsKind		Constant
+hi def link fsNumber		Number
+hi def link fsOctal		Number
+hi def link fsOctalZero		PreProc
+hi def link fsFloat		Float
+hi def link fsOctalError	Error
+hi def link fsString            Constant
+hi def link fsCharacter		Character
+hi def link fsSpecial		SpecialChar
+hi def link fsBlock             Constant
+hi def link fsBracket           Constant
+hi def link fsOperator          Operator

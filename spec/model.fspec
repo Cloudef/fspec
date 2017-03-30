@@ -1,0 +1,25 @@
+struct texture {
+   u8 type;
+   u8 name[16] = ascii;
+   u32 version;
+   u32 width;
+   u32 height;
+   u32 unknown[6];
+   u32 bits_per_pal_clr;
+};
+
+struct geometry {
+   u16 unknown;
+   u16 vert_and_bone_ref_flag;
+   u16 mirror;
+   u32 draw_data_offset;
+   u16 draw_data_size;
+   u32 bone_ref_offset;
+   u16 bone_ref_count;
+   u32 weighted_vert_count_offset;
+   u16 max_weights_per_vertex;
+   u32 weighted_data_offset;
+   u16 weighted_data_count;
+   u32 vertex_data_offset;
+   u16 vertex_data_size;
+};

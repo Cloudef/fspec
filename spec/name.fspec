@@ -1,0 +1,5 @@
+// NPC IDs
+struct name = {
+   u8 name[28] = ascii; // The kind actually depends on ROM section
+   u32 id;
+};
