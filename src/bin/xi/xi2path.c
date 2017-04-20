@@ -7,7 +7,7 @@ int
 main(int argc, char *argv[])
 {
    if (argc < 2)
-      errx(EXIT_FAILURE, "usage: %s id\n", argv[0]);
+      errx(EXIT_FAILURE, "usage: %s id", argv[0]);
 
    char path[12];
    xi2path(path, strtol(argv[1], NULL, 10));

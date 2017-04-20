@@ -8,7 +8,7 @@ int
 main(int argc, char *argv[])
 {
    if (argc < 3)
-      errx(EXIT_FAILURE, "usage: %s <u8|u16|u32|u64> number\n", argv[0]);
+      errx(EXIT_FAILURE, "usage: %s <u8|u16|u32|u64> number", argv[0]);
 
    const struct {
       const char *t;

@@ -78,7 +78,7 @@ main(int argc, char *argv[])
    }
 
    if (!gamedir)
-      errx(EXIT_FAILURE, "usage: %s [-a|-v] gamedir\n", argv[0]);
+      errx(EXIT_FAILURE, "usage: %s [-a|-v] gamedir", argv[0]);
 
    dump_tables(gamedir, (const char*[]){ "FTABLE.DAT", "VTABLE.DAT" }, 1, print_all, verbose);
 

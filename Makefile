@@ -1,42 +1,55 @@
 PREFIX ?= /usr/local
 bindir ?= /bin
 
-WARNINGS := -Wall -Wextra -Wformat=2 -Winit-self -Wfloat-equal -Wcast-align -Wpointer-arith
-CFLAGS += -std=c11 $(WARNINGS)
+MAKEFLAGS += --no-builtin-rules
 
-all: fspec-dump dec2bin xidec xi2path xils xifile
+# GCC 7: -Wstringop-overflow=, -Walloc-size-larger-than=, -Wduplicated-{branches,cond}
+WARNINGS := -Wall -Wextra -Wpedantic -Wformat=2 -Wstrict-aliasing=3 -Wstrict-overflow=5 -Wstack-usage=12500 \
+	-Wfloat-equal -Wcast-align -Wpointer-arith -Wchar-subscripts
+
+override CFLAGS ?= -g
+override CFLAGS += -std=c11 $(WARNINGS)
+override CPPFLAGS += -Isrc
+
+bins = fspec-dump dec2bin xidec xi2path xils xifile uneaf
+all: $(bins)
 
 %.c: %.rl
 	ragel $^
 
-fspec-dump: src/ragel/ragel.h src/ragel/fspec.h src/ragel/fspec.c src/dump.c
-	$(LINK.c) $(filter %.c,$^) $(LDLIBS) -o $@
+%.a:
+	$(LINK.c) -c $(filter %.c,$^) $(LDLIBS) -o $@
 
-dec2bin: src/utils/dec2bin.c
-	$(LINK.c) $(filter %.c,$^) $(LDLIBS) -o $@
+$(bins): %:
+	$(LINK.c) $(filter %.c %.a,$^) $(LDLIBS) -o $@
 
-xidec: src/xi/xidec.c
-	$(LINK.c) $(filter %.c,$^) $(LDLIBS) -o $@
+fspec-ragel.a: src/ragel/ragel.h src/ragel/ragel.c
+fspec-bcode.a: src/fspec/memory.h src/fspec/bcode.h src/fspec/bcode.c
+fspec-lexer.a: src/ragel/ragel.h src/fspec/lexer.h src/fspec/lexer.c
+fspec-validator.a: src/ragel/ragel.h src/fspec/validator.h src/fspec/validator.c
 
-xi2path: src/xi/xi2path.c
-	$(LINK.c) $(filter %.c,$^) $(LDLIBS) -o $@
+fspec-dump: private CPPFLAGS += $(shell pkg-config --cflags-only-I squash-0.8)
+fspec-dump: private LDLIBS += $(shell pkg-config --libs-only-l squash-0.8)
+fspec-dump: src/dump.c fspec-ragel.a fspec-bcode.a fspec-lexer.a fspec-validator.a
 
-xils: src/xi/xils.c
-	$(LINK.c) $(filter %.c,$^) $(LDLIBS) -o $@
+dec2bin: src/bin/misc/dec2bin.c
 
-xifile: src/xi/xifile.c
-	$(LINK.c) $(filter %.c,$^) $(LDLIBS) -o $@
+xidec: src/bin/xi/xidec.c
+xi2path: src/bin/xi/xi2path.c
+xils: src/bin/xi/xils.c
+xifile: src/bin/xi/xifile.c
 
-install:
-	install -Dm755 $(DESTDIR)$(PREFIX)$(bindir)/fspec-dump
-	install -Dm755 $(DESTDIR)$(PREFIX)$(bindir)/dec2bin
-	install -Dm755 $(DESTDIR)$(PREFIX)$(bindir)/xidec
-	install -Dm755 $(DESTDIR)$(PREFIX)$(bindir)/xi2path
-	install -Dm755 $(DESTDIR)$(PREFIX)$(bindir)/xils
-	install -Dm755 $(DESTDIR)$(PREFIX)$(bindir)/xifile
+uneaf: private LDLIBS += $(shell pkg-config --libs-only-l zlib)
+uneaf: src/bin/fw/uneaf.c
+
+install-bin: $(bins)
+	install -dm755 "$(DESTDIR)$(PREFIX)$(bindir)"
+	install -m755 $^ "$(DESTDIR)$(PREFIX)$(bindir)/"
+
+install: install-bin
 
 clean:
-	$(RM) src/ragel/fspec.c
-	$(RM) fspec-dump dec2bin xidec xi2path xils xifile
+	$(RM) src/ragel/ragel.c src/fspec/lexer.c src/fspec/validator.c
+	$(RM) $(bins) *.a
 
 .PHONY: all clean install

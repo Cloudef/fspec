@@ -153,6 +153,7 @@ detect(const char *path)
          printf("%s: unknown\n", name);
       }
    }
+
    fclose(f);
 }
 
@@ -160,7 +161,7 @@ int
 main(int argc, char *argv[])
 {
    if (argc < 2)
-      errx(EXIT_FAILURE, "usage: %s file\n", argv[0]);
+      errx(EXIT_FAILURE, "usage: %s file ...", argv[0]);
 
    for (int i = 1; i < argc; ++i)
       detect(argv[i]);

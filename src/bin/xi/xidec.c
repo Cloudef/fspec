@@ -93,7 +93,7 @@ int
 main(int argc, char *argv[])
 {
    if (argc < 2)
-      errx(EXIT_FAILURE, "usage: %s (name | ability | spell | item | text) < data\n", argv[0]);
+      errx(EXIT_FAILURE, "usage: %s (name | ability | spell | item | text) < data", argv[0]);
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
 

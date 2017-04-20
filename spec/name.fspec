@@ -1,5 +1,8 @@
-// NPC IDs
-struct name = {
-   u8 name[28] = ascii; // The kind actually depends on ROM section
-   u32 id;
+struct name {
+   name: u8[28] | encoding('ascii') str; // The encoding actually depends on ROM region
+   id: u32;
+};
+
+struct dat {
+   name: struct name[$];
 };
