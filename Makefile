@@ -43,8 +43,7 @@ uneaf: private LDLIBS += $(shell pkg-config --libs-only-l zlib)
 uneaf: src/bin/fw/uneaf.c
 
 install-bin: $(bins)
-	install -dm755 "$(DESTDIR)$(PREFIX)$(bindir)"
-	install -m755 $^ "$(DESTDIR)$(PREFIX)$(bindir)/"
+	install -Dm755 $^ "$(DESTDIR)$(PREFIX)$(bindir)"
 
 install: install-bin
 
