@@ -202,7 +202,7 @@ struct state {
    OP_FILTER = 5 (OP_ARG_STR (OP_ARG_NUM | OP_ARG_VAR | OP_ARG_STR)*) $!op_error;
    OP_VISUAL = 6 (OP_ARG_NUM %check_visual_type) $!op_error;
 
-   pattern = (OP_DECLARATION %check_struct <: (OP_DECLARATION %check_member (OP_READ | OP_GOTO) OP_FILTER? OP_VISUAL? %check_member_end)*)* %check_struct_end $!pattern_error;
+   pattern = (OP_DECLARATION %check_struct <: (OP_DECLARATION %check_member (OP_READ | OP_GOTO) OP_FILTER* OP_VISUAL? %check_member_end)*)* %check_struct_end $!pattern_error;
    main := (OP_HEADER <: pattern) %check_decls $advance $!syntax_error;
 }%%
 
