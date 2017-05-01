@@ -24,15 +24,29 @@ to_hex(const uint8_t *buf, const size_t buf_sz, char *out, const size_t out_sz, 
    const char nibble[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
    const uint8_t nbs = sizeof(nibble) - 1;
 
-   size_t w = 0;
+   size_t w = 0, last_non_zero = w;
    for (size_t i = 0; i < buf_sz && out_sz > 2 && w < out_sz - 2; ++i) {
       for (uint8_t c = 0; c < CHAR_BIT / 8 && w < out_sz; ++c) {
          const size_t idx = (reverse ? (buf_sz - 1) - i : i);
          const uint8_t hi = (buf[idx] >> (4 * (c + 1))) & nbs;
          const uint8_t lo = (buf[idx] >> (8 * c)) & nbs;
-         out[w++] = nibble[hi];
-         out[w++] = nibble[lo];
+
+         if (w || hi) {
+            out[w++] = nibble[hi];
+            last_non_zero = (hi ? w : last_non_zero);
+         }
+
+         if (w || lo) {
+            out[w++] = nibble[lo];
+            last_non_zero = (lo ? w : last_non_zero);
+         }
       }
+   }
+
+   if (!w) {
+      out[w++] = nibble[0];
+   } else {
+      w = last_non_zero;
    }
 
    assert(w < out_sz);
@@ -71,8 +85,8 @@ static void
 print_hex(const uint8_t *buf, const size_t size)
 {
    char hex[2 * sizeof(fspec_num) + 1];
-   to_hex(buf, size, hex, sizeof(hex), false);
-   printf("%s", hex);
+   to_hex(buf, size, hex, sizeof(hex), true);
+   printf("0x%s", hex);
 }
 
 static void
