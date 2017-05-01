@@ -31,19 +31,16 @@ to_hex(const uint8_t *buf, const size_t buf_sz, char *out, const size_t out_sz, 
          const uint8_t hi = (buf[idx] >> (4 * (c + 1))) & nbs;
          const uint8_t lo = (buf[idx] >> (8 * c)) & nbs;
 
-         if (w || hi) {
+         if (w || hi || lo) {
             out[w++] = nibble[hi];
-            last_non_zero = (hi ? w : last_non_zero);
-         }
-
-         if (w || lo) {
             out[w++] = nibble[lo];
-            last_non_zero = (lo ? w : last_non_zero);
+            last_non_zero = (hi || lo ? w : last_non_zero);
          }
       }
    }
 
    if (!w) {
+      out[w++] = nibble[0];
       out[w++] = nibble[0];
    } else {
       w = last_non_zero;
