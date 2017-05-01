@@ -1,5 +1,5 @@
 struct elf64 {
-   e_entry: u64;
+   e_entry: u64 hex;
    e_phoff: u64;
    e_shoff: u64;
 };
