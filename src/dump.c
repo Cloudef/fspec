@@ -103,7 +103,7 @@ print_array(const uint8_t *buf, const size_t size, const size_t nmemb, void (*fu
       fun(buf + n * size, size);
       printf("%s", (nmemb > 1 && n + 1 < nmemb ? ", " : ""));
 
-      if (!((n + 1) % 8))
+      if (n + 1 < nmemb && !((n + 1) % 8))
          printf("\n%*s", indent, "");
    }
 
