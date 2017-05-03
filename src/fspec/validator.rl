@@ -31,7 +31,6 @@ struct state {
    struct ragel ragel;
    struct context context;
    struct stack stack;
-   bool valid;
 };
 
 %%{
