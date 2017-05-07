@@ -32,6 +32,7 @@ ragel_exec_error(const struct ragel *ragel, const int start_cs, const char **err
    assert(ragel && ragel->cl && error);
    int cs = start_cs;
    const char *p = ragel->cl, *pe = ragel->pe, *eof = ragel->eof;
+   assert(p <= pe);
    %% write exec;
 }
 
@@ -47,6 +48,7 @@ ragel_throw_error(struct ragel *ragel, const char *fmt, ...)
       ragel_exec_error(ragel, ragel_en_search_err, &error);
 
    const char *name = (ragel->name ? ragel->name : "");
+   assert(error >= ragel->cl);
    uint64_t column = (error - ragel->cl);
    fprintf(stderr, "\x1b[37m%s:%" PRIu64 ":%" PRIu64 " \x1b[31merror: \x1b[0m", name, ragel->lineno, column);
 
@@ -85,4 +87,5 @@ ragel_feed_input(struct ragel *ragel, const bool eof, const struct ragel_mem *in
    ragel->cl = ragel->p = ragel->input.data;
    ragel->pe = ragel->input.end;
    ragel->eof = (eof ? ragel->pe : NULL);
+   assert(ragel->p <= ragel->pe);
 }
