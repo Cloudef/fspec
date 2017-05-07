@@ -20,7 +20,7 @@
    word = alnum*;
    token = ' ' | punct;
    until_err = (any when { fpc != *error })*;
-   search_err := ((any | token %{ *error = fpc; }) when { fpc != ragel->p })*;
+   search_err := ((any | token %{ *error = fpc; }) when { fpc != ragel->pe && fpc <= ragel->p })*;
    print_err := (until_err %red <: word %reset <: (any - '\n')*) ${ fputc(fc, stderr); } >lead %!end %/end;
    print_mark := (until_err ${ fputc(' ', stderr); } %red %mark <: any word $tail) >lead %!end %/end;
 }%%
