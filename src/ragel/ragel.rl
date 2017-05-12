@@ -21,8 +21,8 @@
 
    word = print | valid*;
    until_err = (any when { fpc != *error })*;
-   print_err := (until_err <: word >red %reset <: (print - '\n')*) $char >*lead %!end %/end;
-   print_mark := (until_err $lead <: word >red $mark) >*lead %!end %/end;
+   print_err := (until_err <: (word - '\n') >red %reset <: (print - '\n')*) $char >*lead %!end %/end;
+   print_mark := (until_err $lead <: (any | word) >red $mark) >*lead %!end %/end;
 }%%
 
 static void
