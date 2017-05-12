@@ -4,8 +4,6 @@
 #include <stdarg.h>
 #include <assert.h>
 
-#define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
-
 %%{
    machine ragel;
    write data noerror nofinal;
@@ -13,16 +11,18 @@
    action red { fputs("\x1b[31m", stderr); }
    action reset { fputs("\x1b[0m", stderr); }
    action end { fputs("\x1b[0m\n", stderr); }
-   action mark { fputc('^', stderr); }
-   action tail { fputc('~', stderr); }
+   action mark { fputc((fpc == *error ? '^' : '~'), stderr); }
    action lead { fputc(' ', stderr); }
+   action char { fputc(fc, stderr); }
 
-   word = alnum*;
-   token = ' ' | punct;
+   valid = ^cntrl - space - punct;
+   mark_token = (space valid | punct) ${ *error = fpc; };
+   search_err := ((any | mark_token) when { fpc != ragel->pe && fpc <= ragel->p })*;
+
+   word = print | valid*;
    until_err = (any when { fpc != *error })*;
-   search_err := ((any | token %{ *error = fpc; }) when { fpc != ragel->pe && fpc <= ragel->p })*;
-   print_err := (until_err %red <: word %reset <: (any - '\n')*) ${ fputc(fc, stderr); } >lead %!end %/end;
-   print_mark := (until_err ${ fputc(' ', stderr); } %red %mark <: any word $tail) >lead %!end %/end;
+   print_err := (until_err <: word >red %reset <: (print - '\n')*) $char >*lead %!end %/end;
+   print_mark := (until_err $lead <: word >red $mark) >*lead %!end %/end;
 }%%
 
 static void
