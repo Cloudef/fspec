@@ -530,7 +530,7 @@ state_finish_declaration(struct state *state, const enum fspec_declaration decl)
    esc = [abfnrtv\\'"e];
    esc_chr = '\\';
    esc_hex = 'x' <: xdigit{2};
-   hex = '0' <: esc_hex;
+   hex = '0x' <: xdigit{1,};
    oct = [0-7]{1,3};
    dec = [\-+]? <: (([1-9] <: digit*) | '0');
    valid = ^cntrl;
