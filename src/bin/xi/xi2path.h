@@ -16,7 +16,7 @@ xi2path(char out[12], const uint16_t id)
    // In the above graph, 'R' bits form the ROM section (7) and 'D' bits form the DAT (104).
    // Thus maximum DAT and ROM section IDs are 127 and 511 respectively (65535 as decimal).
 
-   snprintf(out, 12, "%u/%u.DAT", id >> 7, id & 0x7F);
+   snprintf(out, 12, "%u/%u.DAT", (uint8_t)(id >> 7), (uint16_t)(id & 0x7F));
 }
 
 static inline void
