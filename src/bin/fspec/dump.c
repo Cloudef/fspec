@@ -14,6 +14,7 @@
 #include <fspec/bcode.h>
 #include <fspec/lexer.h>
 #include <fspec/validator.h>
+#include "fspec/ragel/lexer-expr.h"
 #include "util/membuf.h"
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
@@ -756,6 +757,29 @@ fopen_or_die(const char *path, const char *mode)
 
 #define container_of(ptr, type, member) ((type *)((char *)(1 ? (ptr) : &((type *)0)->member) - offsetof(type, member)))
 
+struct expr {
+   struct fspec_expr expr;
+   struct membuf output;
+   FILE *file;
+};
+
+static size_t
+fspec_expr_write(struct fspec_expr *expr, const void *output, const size_t size, const size_t nmemb)
+{
+   assert(expr && output);
+   // struct expr *l = container_of(expr, struct expr, expr);
+   (void)expr, (void)size, (void)nmemb;
+   return nmemb;
+}
+
+static size_t
+fspec_expr_read(struct fspec_expr *expr, void *input, const size_t size, const size_t nmemb)
+{
+   assert(expr && input);
+   struct expr *l = container_of(expr, struct expr, expr);
+   return fread(input, size, nmemb, l->file);
+}
+
 struct lexer {
    struct fspec_lexer lexer;
    struct membuf output;
@@ -800,6 +824,25 @@ main(int argc, const char *argv[])
       errx(EXIT_FAILURE, "usage: %s file.spec < data", argv[0]);
 
    char output[4096];
+
+   {
+      char input[4096];
+      struct expr l = {
+         .expr = {
+            .ops.read = fspec_expr_read,
+            .ops.write = fspec_expr_write,
+            .mem.input = { .data = input, .len = sizeof(input) },
+         },
+         .file = fopen_or_die(argv[1], "rb"),
+         .output.mem = { .data = output, .len = sizeof(output) },
+      };
+
+      if (!fspec_expr_parse(&l.expr, argv[1]))
+         exit(EXIT_FAILURE);
+
+      fclose(l.file);
+      // bcode = l.expr.mem.output;
+   }
 
    {
       char input[4096];

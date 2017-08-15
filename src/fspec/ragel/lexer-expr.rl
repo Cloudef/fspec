@@ -66,11 +66,7 @@ pop(char cur, char *mstack, size_t open)
    bitwise_operators = '&' | '|' | '^' | '<<' | '>>';
 
    main := |*
-      '+' => op;
-      '/' => op;
-      '*' => op;
-      '-' => op;
-      '^' => op;
+      calc_operators => op;
       stack_num => { mstack[open++] = fc;};
       '(' => { };
       ')' => { };

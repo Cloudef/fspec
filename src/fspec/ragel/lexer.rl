@@ -128,7 +128,7 @@
    newline = '\n';
    valid = ^cntrl;
    comment = '//' <: valid* :>> newline;
-   type = ('u8' | 's8') %r8 | ('u16' | 's16') %r16 | ('u32' | 's32') %r32 | ('u64' | 's32') %r64;
+   type = ('u8' | 's8') %r8 | ('u16' | 's16') %r16 | ('u32' | 's32') %r32 | ('u64' | 's64') %r64;
    visual = 'nul' %vnul | 'dec' %vdec | 'hex' %vhex | 'str' %vstr;
 
    # Catchers
