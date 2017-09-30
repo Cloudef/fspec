@@ -4,7 +4,7 @@ bindir ?= /bin
 MAKEFLAGS += --no-builtin-rules
 
 # GCC 7: -Wstringop-overflow=, -Walloc-size-larger-than=, -Wduplicated-{branches,cond}
-WARNINGS := -Wall -Wextra -Wpedantic -Wformat=2 -Wstrict-aliasing=3 -Wstrict-overflow=5 -Wstack-usage=12500 \
+WARNINGS := -Wall -Wextra -Wpedantic -Wformat=2 -Wstrict-aliasing=3 -Wstrict-overflow=3 -Wstack-usage=12500 \
 	-Wfloat-equal -Wcast-align -Wpointer-arith -Wchar-subscripts
 
 override CFLAGS ?= -g
