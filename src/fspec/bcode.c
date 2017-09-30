@@ -97,7 +97,7 @@ fspec_arg_get_mem(const enum fspec_arg *arg, const void *data, struct fspec_mem 
 fspec_num
 fspec_arg_get_num(const enum fspec_arg *arg)
 {
-   assert(arg);
+   assert(arg && *arg < FSPEC_ARG_LAST);
    fspec_num v;
    switch (*arg) {
       case FSPEC_ARG_NUM:
