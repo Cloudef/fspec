@@ -1,0 +1,275 @@
+= Filespec Structured Data Modelling Language User Guide
+Jari Vetoniemi <mailroxas@gmail.com>
+Filespec Version 0.1
+:toc:
+:toclevels: 3
+:numbered:
+
+.License
+
+       Permission is hereby granted, free of charge, to any person obtaining a copy
+       of this software and associated documentation files (the "Software"), to
+       deal in the Software without restriction, including without limitation the
+       rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+       sell copies of the Software, and to permit persons to whom the Software is
+       furnished to do so, subject to the following conditions:
+
+       The above copyright notice and this permission notice shall be included in all
+       copies or substantial portions of the Software.
+
+       THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+       IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+       FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+       AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+       LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+       OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+       SOFTWARE.
+
+== Introduction
+
+=== Abstract
+
+Writeup about how writing and reading structured data is mostly done manually.
+
+=== Motivation
+
+Writeup how boring it is to write similar code each time when trying to read or
+write structured data. How easy it is to make mistakes or cause unportable and
+unoptimized code. Write how filespec can help with reverse engineering and
+figuring out data structures, how it can be used to generate both packers and
+unpackers giving you powerful tools for working with structured data.
+
+=== Overview
+
+Goal of Filespec is to document the structured data and relationships within,
+so the data can be understood and accessed completely.
+
+=== Related Work
+
+==== Kaitai
+
+Kaitai is probably not very well known utility, that has similar goal to
+filespec.
+
+Explain cons:
+
+- Depends on runtime
+- Can only model data which runtime supports (only certain
+  compression/decompression available for example, while in filespec
+  filters can express anything)
+- Mainly designed for generated code, not general utility
+- Uses YAML for modelling structured data which is quite wordy and akward
+
+/////////////////////////////////
+How Filespec is different from Kaitai.
+
+Explain the uses cases that would be difficult or impossible on Kaitai.
+/////////////////////////////////
+
+//////////////////////
+=== Development Status
+//////////////////////
+
+== Modelling Structured Data
+
+=== Filespec Specifications
+
+Brief of Filespec specifications and syntax
+
+.Modelling ELF header
+----
+include::../spec/elf.fspec[]
+----
+
+=== Keywords
+
+|=============================================================================
+| struct _name_ { ... }        | Declares structured data
+| enum _name_ { ... }          | Declares enumeration
+| union _name_ (_var_) { ... } | Declares union, can be used to model variants
+|=============================================================================
+
+.Struct member declaration syntax
+Parenthesis indicate optional fields
+----
+member_name: member_type (array ...) (| filter ...) (visual hint);
+----
+
+=== Types
+
+Basic types to express binary data.
+
+|================================================================
+| struct _name_ | Named structured data (Struct member only)
+| enum _name_   | Value range is limited to the named enumeration
+| u8, s8        | Unsigned, signed 8bit integer
+| u16, s16      | Unsigned, signed 16bit integer
+| u32, s32      | Unsigned, signed 32bit integer
+| u64, s64      | Unsigned, signed 64bit integer
+|================================================================
+
+=== Arrays
+
+Valid values that can be used inside array subscript operation.
+
+|=================================================
+| _expr_ | Uses result of expression as array size
+| \'str' | Grow array until occurance of str
+| $      | Grow array until end of data is reached
+|=================================================
+
+.Reading length prefixed data
+----
+num_items: u16 dec;
+items: struct item[num_items];
+----
+
+.Reading null terminated string
+----
+cstr: u8['\0'] str;
+----
+
+.Reading repeating pattern
+----
+pattern: struct pattern[$];
+----
+
+=== Filters
+
+Filters can be used to sanity check and transform data into more sensible
+format while still maintaining compatible data layout for both packing and
+unpacking. They also act as documentation for the data, e.g. documenting
+possible encoding, compression and valid data range of member.
+
+Filters are merely an idea, generated packer/unpacker generates call to the
+filter, but leaves the implementation to you. Thus use of filters do not imply
+runtime dependency, nor they force that you actually implement the filter.
+For example, you do not want to run the compression filters implicitly as it
+would use too much memory, and instead do it only when data is being accessed.
+
+It's useful for Filespec interpreter to implement common set of filters
+to be able to pack/unpack wide variety of formats. When modelling new formats
+consider contributing your filter to the interpeter. Filters for official
+interepter are implemented as command pairs (Thus filters are merely optional
+dependency in interpeter)
+
+|========================================================================
+| matches(_str_)                | Data matches _str_
+| encoding(_str_, ...)          | Data is encoded with algorithm _str_
+| compression(_str_, ...)       | Data is compressed with algorithm _str_
+| encryption(_str_, _key_, ...) | Data is encrypted with algorithm _str_
+|========================================================================
+
+.Validating file headers
+----
+header: u8[4] | matches('\x7fELF') str;
+----
+
+.Decoding strings
+----
+name: u8[32] | encoding('sjis') str;
+----
+
+.Decompressing data
+----
+data_sz: u32;
+data: u8[$] | compression('deflate', data_sz) hex;
+----
+
+=== Visual hints
+
+Visual hints can be used to advice tools how data should be presented to
+human, as well as provide small documentation what kind of data to expect.
+
+|===========================================
+| nul       | Do not visualize data
+| dec       | Visualize data as decimal
+| hex       | Visualize data as hexdecimal
+| str       | Visualize data as string
+| mime/type | Associate data with media type
+|===========================================
+
+== Relationships
+
+To keep Filespec specifications 2-way, that is, structure can be both packed
+and unpacked, specification has to make sure it forms the required
+relationships between members.
+
+Compiler has enough information to deduce whether specification forms all the
+needed relationships, thus it can throw warning or error when the specification
+does not fill the 2-way critera.
+
+=== Implicit Relationships
+
+Implicit relationships are formed when result of member is referenced. For
+example using result of member as array size, or as a filter parameter.
+
+.Array relationship
+In packing case, even if _len_ would not be filled, we can deduce the correct
+value of _len_ from the length of _str_ if it has been filled. We can also use
+this information to verify that length of _str_ matches the value of _len_, if
+both have been filled.
+----
+len: u16;
+str: u8[len] str;
+----
+
+.Parameter relationship
+In packing case, the same rules apply as in array relationship. Implicit
+relationship is formed between _decompressed_sz_ member and compression filter.
+----
+decompressed_sz: u32 dec;
+data: u8[$] | compression('zlib', decompressed_sz);
+----
+
+=== Explicit Relationships
+
+Sometimes we need to form explicit relationships when the structure is more
+complicated.
+
+TODO: When we can actually model FFXI string tables correctly, it will be a
+good example.
+
+== Implementation
+
+=== Compiler
+
+Compiler is implemented with Ragel. It parses the source and emits bytecode
+in a single pass. The compiler is very simple and possible future steps such
+as optimizations would be done on the bytecode level instead the source level.
+
+=== Validator
+
+Validator takes the output of compiler and checks the bytecode follows a
+standard pattern, and isn't invalid. Having validator pass simplifies the
+code of translators, as they can assume their input is valid and don't need to
+do constant error checking. It also helps catch bugs from compiler early on.
+
+=== Bytecode
+
+The bytecode is low-level representation of Filespec specification. It's
+merely a stack machine with values and operations. To be able to still
+understand the low-level representation and generate high-level code, the
+bytecode is guaranteed to follow predictable pattern (by validator).
+
+To make sure all source level attributes such as mathematical expressions
+can be translated losslessly to target language, the bytecode may contain
+special attributes.
+
+TODO: Document bytecode operations and the predictable pattern here
+
+=== Translators
+
+Translators take in the Filespec bytecode and output packer/unpacker in a
+target language. Translators are probably the best place to implement domain
+specific and language specific optimizations and options.
+
+=== Interpreters
+
+Interpreters can be used to run compiled bytecode and use the information to
+understand and transform structured data as a external utility. For example
+it could give shell ability to understand and parse binary formats. Or make
+it very easy to pack and unpack files, create game translation tools, etc...
+
+Interpreters can also act as debugging tools, such as visualize the model on
+top of hexadecimal view of data to aid modelling / reverse engineering of data.
