@@ -582,6 +582,8 @@ noop:
                   decl->buf.written += decl->size * read;
                   decl->nmemb = read;
                }
+
+               assert(decl->nmemb != 0);
             }
             break;
 
