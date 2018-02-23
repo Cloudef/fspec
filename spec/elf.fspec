@@ -1,3 +1,11 @@
+enum foo {
+   foo: 0x1;
+   bar: 0x2;
+   eaf: 0x3;
+   eaf: 0xDEADBEEF;
+   bar;
+};
+
 struct elf64 {
    e_entry: u64 hex;
    e_phoff: u64;

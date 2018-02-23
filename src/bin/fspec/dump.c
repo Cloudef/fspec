@@ -14,8 +14,11 @@
 #include <fspec/bcode.h>
 #include <fspec/lexer.h>
 #include <fspec/validator.h>
+#include "util/membuf.h"
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
+
+#if 0
 
 static size_t
 to_hex(const uint8_t *buf, const size_t buf_sz, char *out, const size_t out_sz, const bool reverse)
@@ -737,6 +740,7 @@ execute(const struct fspec_mem *mem)
 
    free(context.decl);
 }
+#endif
 
 static FILE*
 fopen_or_die(const char *path, const char *mode)
@@ -754,17 +758,28 @@ fopen_or_die(const char *path, const char *mode)
 
 struct lexer {
    struct fspec_lexer lexer;
+   struct membuf output;
    FILE *file;
 };
 
 static size_t
-fspec_lexer_read(struct fspec_lexer *lexer, void *ptr, const size_t size, const size_t nmemb)
+fspec_lexer_write(struct fspec_lexer *lexer, const enum fspec_lexer_section section, const void *output, const size_t size, const size_t nmemb)
 {
-   assert(lexer && ptr);
-   struct lexer *l = container_of(lexer, struct lexer, lexer);
-   return fread(ptr, size, nmemb, l->file);
+   assert(lexer && output);
+   // struct lexer *l = container_of(lexer, struct lexer, lexer);
+   (void)lexer, (void)section, (void)size, (void)nmemb;
+   return nmemb;
 }
 
+static size_t
+fspec_lexer_read(struct fspec_lexer *lexer, void *input, const size_t size, const size_t nmemb)
+{
+   assert(lexer && input);
+   struct lexer *l = container_of(lexer, struct lexer, lexer);
+   return fread(input, size, nmemb, l->file);
+}
+
+#if 0
 static size_t
 fspec_validator_read(struct fspec_validator *validator, void *ptr, const size_t size, const size_t nmemb)
 {
@@ -776,6 +791,7 @@ fspec_validator_read(struct fspec_validator *validator, void *ptr, const size_t 
    assert(validator->mem.input.len == 0);
    return read;
 }
+#endif
 
 int
 main(int argc, const char *argv[])
@@ -784,25 +800,27 @@ main(int argc, const char *argv[])
       errx(EXIT_FAILURE, "usage: %s file.spec < data", argv[0]);
 
    char output[4096];
-   struct fspec_mem bcode = {0};
 
    {
       char input[4096];
       struct lexer l = {
          .lexer = {
             .ops.read = fspec_lexer_read,
-            .mem.input = { .data = input, sizeof(input) },
-            .mem.output = { .data = output, sizeof(output) },
+            .ops.write = fspec_lexer_write,
+            .mem.input = { .data = input, .len = sizeof(input) },
          },
          .file = fopen_or_die(argv[1], "rb"),
+         .output.mem = { .data = output, .len = sizeof(output) },
       };
 
       if (!fspec_lexer_parse(&l.lexer, argv[1]))
          exit(EXIT_FAILURE);
 
       fclose(l.file);
-      bcode = l.lexer.mem.output;
+      // bcode = l.lexer.mem.output;
    }
+
+#if 0
 
    {
       struct fspec_validator validator = {
@@ -815,5 +833,6 @@ main(int argc, const char *argv[])
    }
 
    execute(&bcode);
+#endif
    return EXIT_SUCCESS;
 }

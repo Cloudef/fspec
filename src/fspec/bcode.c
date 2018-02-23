@@ -1,5 +1,6 @@
 #include <fspec/bcode.h>
-#include "bcode-internal.h"
+#include <fspec/memory.h>
+#include "private/bcode-types.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -8,7 +9,15 @@
 
 static_assert(sizeof(fspec_off) <= sizeof(((struct fspec_mem*)0)->len), "fspec_off should not be larger than what fspec_mem can represent");
 static_assert(sizeof(enum fspec_op) == sizeof(uint8_t), "enum fspec_op is expected to have size of uint8_t");
-static_assert(sizeof(enum fspec_arg) == sizeof(uint8_t), "enum fspec_arg is expected to have size of uint8_t");
+static_assert(sizeof(struct fspec_bcode) == sizeof(enum fspec_op), "struct fspec_bcode is expected to have size of enum fspec_op");
+static_assert(sizeof(FSPEC_OP_LAST) <= 8, "op codes need more than 3 bits to be represented");
+
+#if 0
+uint8_t
+fspec_op_get_num_args(const struct fspec_op_code *code)
+{
+   return code->op >> 2;
+}
 
 static fspec_off
 arg_data_len(const enum fspec_arg *arg)
@@ -187,3 +196,4 @@ fspec_op_next(const enum fspec_op *start, const void *end, const bool skip_args)
 
    return NULL;
 }
+#endif

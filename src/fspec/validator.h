@@ -2,6 +2,8 @@
 
 #include <fspec/memory.h>
 
+#include <stdbool.h>
+
 struct fspec_validator;
 struct fspec_validator {
    struct {

@@ -9,7 +9,7 @@ syn keyword	fsTodo		contained TODO FIXME XXX
 syn cluster	fsCommentGroup	contains=fsTodo,fsBadContinuation
 syn region	fsComment	start="//" skip="\\$" end="$" keepend contains=@fsCommentGroup,@Spell
 
-syn keyword	fsStructure	struct union
+syn keyword	fsStructure	enum struct union
 syn keyword	fsType		s8 s16 s32 s64
 syn keyword	fsType		u8 u16 u32 u64
 syn keyword	fsConstant	nul dec hex str

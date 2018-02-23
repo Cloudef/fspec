@@ -23,14 +23,17 @@ all: $(bins)
 $(bins): %:
 	$(LINK.c) $(filter %.c %.a,$^) $(LDLIBS) -o $@
 
-fspec-ragel.a: src/ragel/ragel.h src/ragel/ragel.c
-fspec-bcode.a: src/fspec/memory.h src/fspec/bcode.h src/fspec/bcode.c
-fspec-lexer.a: src/ragel/ragel.h src/fspec/lexer.h src/fspec/lexer.c
-fspec-validator.a: src/ragel/ragel.h src/fspec/validator.h src/fspec/validator.c
+fspec-membuf.a: src/util/membuf.h src/util/membuf.c
+fspec-ragel.a: src/util/ragel/ragel.h src/util/ragel/ragel.c
+fspec-lexer-stack.a: src/fspec/ragel/lexer-stack.h src/fspec/ragel/lexer-stack.c
+fspec-lexer-expr.a: src/fspec/ragel/lexer-expr.h src/fspec/ragel/lexer-expr.c
+fspec-bcode.a: src/fspec/memory.h src/fspec/private/bcode-types.h src/fspec/bcode.h src/fspec/bcode.c fspec-ragel.a
+fspec-lexer.a: src/fspec/lexer.h src/fspec/ragel/lexer.c fspec-lexer-stack.a fspec-lexer-expr.a fspec-bcode.a
+fspec-validator.a: src/fspec/validator.h src/fspec/ragel/validator.c fspec-ragel.a
 
 fspec-dump: private CPPFLAGS += $(shell pkg-config --cflags-only-I squash-0.8)
 fspec-dump: private LDLIBS += $(shell pkg-config --libs-only-l squash-0.8)
-fspec-dump: src/dump.c fspec-ragel.a fspec-bcode.a fspec-lexer.a fspec-validator.a
+fspec-dump: src/bin/fspec/dump.c fspec-ragel.a fspec-membuf.a fspec-bcode.a fspec-lexer-stack.a fspec-lexer-expr.a fspec-lexer.a fspec-validator.a
 
 dec2bin: src/bin/misc/dec2bin.c
 
@@ -48,7 +51,7 @@ install-bin: $(bins)
 install: install-bin
 
 clean:
-	$(RM) src/ragel/ragel.c src/fspec/lexer.c src/fspec/validator.c
+	$(RM) src/util/ragel/*.c src/fspec/ragel/*.c
 	$(RM) $(bins) *.a
 
 .PHONY: all clean install
