@@ -1,8 +1,8 @@
 struct name {
-   name: u8[28] | encoding('ascii') str; // The encoding actually depends on ROM region
-   id: u32;
+   u8 name[28] | encoding('ascii') str; // The encoding actually depends on ROM region
+   u32 id;
 };
 
 struct dat {
-   name: struct name[$];
+   struct name name[$];
 };

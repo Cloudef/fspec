@@ -15,14 +15,12 @@ struct item {
    u16 type;
    u16 resource;
    u16 targets;
-
-   union data (type) {
-      4  => struct weapon weapon;
-      5  => struct armor armor;
-      7  => struct usable usable;
-      12 => struct puppet puppet;
-      *  => struct general general;
-   };
-
+   select (type) {
+       4) struct weapon weapon;
+       5) struct armor armor;
+       7) struct usable usable;
+      12) struct puppet puppet;
+       *) struct general general;
+   } data;
    struct strings strings;
 };

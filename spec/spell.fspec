@@ -1,22 +1,22 @@
 struct spell {
-   index: u16;
-   type: u16; // 1-6 for White/Black/Summon/Ninja/Bard/Blue
-   element: u16;
-   targets: u16;
-   skill: u16;
-   mp_cost: u16;
-   casting_time: u8; // in quarter of seconds
-   recast_delay: u8; // in quarter of seconds
-   level: u8[24] hex; // 1 byte per job, 0xxFF if not learnable, first slot is NONE job so always 0xFF
-   id: u16; // 0 for "unused" spells; often, but not always, equal to index
-   unknown: u8;
-   jp_name: u8[20] | encoding('sjis') str;
-   en_name: u8[20] | encoding('ascii') str;
-   jp_description: u8[128] | encoding('sjis') str;
-   en_description: u8[128] | encoding('ascii') str;
-   padding: u8[687] nul;
+   u16 index;
+   u16 type; // 1-6 for White/Black/Summon/Ninja/Bard/Blue
+   u16 element;
+   u16 targets;
+   u16 skill;
+   u16 mp_cost;
+   u8 casting_time; // in quarter of seconds
+   u8 recast_delay; // in quarter of seconds
+   u8 level[24] hex; // 1 byte per job, 0xxFF if not learnable, first slot is NONE job so always 0xFF
+   u16 id; // 0 for "unused" spells; often, but not always, equal to index
+   u8 unknown;
+   u8 jp_name[20] | encoding('sjis') str;
+   u8 en_name[20] | encoding('ascii') str;
+   u8 jp_description[128] | encoding('sjis') str;
+   u8 en_description[128] | encoding('ascii') str;
+   u8 padding[687] nul;
 };
 
 struct dat {
-   spell: struct spell[$];
+   struct spell spell[$];
 };

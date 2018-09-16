@@ -1,7 +1,7 @@
 struct emz {
-   header: u8[4] | matches('#EMZ') str;
-   unknown: u32 hex; // most likely redunancy check (crc32?)
-   size: u32;
-   offset: u32; // always 16?
-   data: u8[$] | compression('deflate', size) hex;
+   u8 header[4] | matches('#EMZ') str;
+   u32 unknown hex; // most likely redunancy check (crc32?)
+   u32 size;
+   u32 offset; // always 16?
+   u8 data[$] | compression('deflate', size) hex;
 };

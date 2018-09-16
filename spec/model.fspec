@@ -1,6 +1,6 @@
 struct texture {
    u8 type;
-   u8 name[16] = ascii;
+   u8 name[16] | encoding('ascii') str;
    u32 version;
    u32 width;
    u32 height;

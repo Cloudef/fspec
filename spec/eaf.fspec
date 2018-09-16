@@ -1,17 +1,17 @@
 struct file {
-   path: u8[256] | encoding('ascii') str;
-   offset: u64;
-   size: u64;
-   padding: u8[16] nul;
+   u8 path[256] | encoding('ascii') str;
+   u64 offset;
+   u64 size;
+   u8 padding[16] nul;
 };
 
 struct eaf {
-   header: u8[4] | matches('#EAF') str;
-   major: u16;
-   minor: u16;
-   size: u64;
-   count: u32;
-   unknown: u64;
-   padding: u8[100] nul;
-   files: struct file[count];
+   u8 header[4] | matches('#EAF') str;
+   u16 major;
+   u16 minor;
+   u64 size;
+   u32 count;
+   u64 unknown;
+   u8 padding[100] nul;
+   struct file files[count];
 };

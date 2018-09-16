@@ -9,10 +9,9 @@ syn keyword	fsTodo		contained TODO FIXME XXX
 syn cluster	fsCommentGroup	contains=fsTodo,fsBadContinuation
 syn region	fsComment	start="//" skip="\\$" end="$" keepend contains=@fsCommentGroup,@Spell
 
-syn keyword	fsStructure	enum struct union
-syn keyword	fsType		s8 s16 s32 s64
-syn keyword	fsType		u8 u16 u32 u64
-syn keyword	fsConstant	nul dec hex str
+syn keyword	fsStructure	enum struct select until
+syn match	fsType		"[su][1-9][0-9]*"
+syn keyword	fsConstant	nul dec hex str be le true false
 
 syn case ignore
 syn match	fsNumbers	display transparent "\<\d\|\.\d" contains=fsNumber,fsFloat,fsOctalError,fsOctal
@@ -31,6 +30,7 @@ syn case match
 syn match	fsSpecial	display contained "\\\(x\x\+\|\o\{1,3}\|.\|$\)"
 syn match	fsString1	"'[^']*'" contains=fsSpecial
 syn match	fsString2	'"[^"]*"' contains=fsSpecial
+syn match	fsBinary	"b[0-1x]\+"
 
 syn match       fsBlock          "[{}]"
 syn match       fsBracket        "[\[\]]"
@@ -43,6 +43,7 @@ hi def link fsComment		Comment
 hi def link fsStructure		Structure
 hi def link fsType		Type
 hi def link fsConstant          Constant
+hi def link fsBinary            Number
 hi def link fsNumber		Number
 hi def link fsOctal		Number
 hi def link fsOctalZero		PreProc

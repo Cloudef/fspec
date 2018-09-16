@@ -29,33 +29,38 @@ Filespec Version 0.1
 
 === Abstract
 
-Writeup about how writing and reading structured data is mostly done manually.
+Often while developing a software, it has to understand and access some sort of
+binary data. Often there might be a library or something that helps you with
+this task. However, many times these solutions are lacking or doesn't work
+properly on different platforms. Sometimes there might not be solution at all
+for your particular environment and you have to do it yourself again. Or even
+if you are creating a new format, there's lack of tools to prototype it, and
+every change needs refactoring of the packing/unpacking code.
 
 === Motivation
 
-Writeup how boring it is to write similar code each time when trying to read or
-write structured data. How easy it is to make mistakes or cause unportable and
-unoptimized code. Write how filespec can help with reverse engineering and
-figuring out data structures, how it can be used to generate both packers and
-unpackers giving you powerful tools for working with structured data.
+Filespec lets you describe the format itself, so that you can generate
+portable and effecient code for reading and writing the specified data in
+a simple way. It also provides bunch of utilities that helps you develop
+formats, or even used as a tool for reading and writing binary files.
 
 === Overview
 
 Goal of Filespec is to document the structured data and relationships within,
-so the data can be understood and accessed completely.
+so the data can be understood completely.
 
 === Related Work
 
 ==== Kaitai
 
 Kaitai is probably not very well known utility, that has similar goal to
-filespec.
+Filespec.
 
 Explain cons:
 
 - Depends on runtime
 - Can only model data which runtime supports (only certain
-  compression/decompression available for example, while in filespec
+  compression/decompression available for example, while in Filespec
   filters can express anything)
 - Mainly designed for generated code, not general utility
 - Uses YAML for modelling structured data which is quite wordy and akward
@@ -81,60 +86,115 @@ Brief of Filespec specifications and syntax
 include::../spec/elf.fspec[]
 ----
 
-=== Keywords
+=== Top-level keywords
 
-|=============================================================================
+Top-level keywords, they can't be used inside struct declarations.
+
+[options="header"]
+|========================================================
+| Keyword                      | Description
+| enum { ... }                 | Declares enumeration
 | struct _name_ { ... }        | Declares structured data
-| enum _name_ { ... }          | Declares enumeration
-| union _name_ (_var_) { ... } | Declares union, can be used to model variants
-|=============================================================================
+|========================================================
 
-.Struct member declaration syntax
-Parenthesis indicate optional fields
+=== Enums
+
 ----
-member_name: member_type (array ...) (| filter ...) (visual hint);
+enum {
+   first,
+   second,
+   seventh = 7,
+   eight
+};
 ----
 
-=== Types
+=== Structs
+
+----
+struct blob {
+   type name (array ...) (| filter ...) (visual hint);
+};
+----
+
+==== Types
 
 Basic types to express binary data.
 
-|================================================================
-| struct _name_ | Named structured data (Struct member only)
-| enum _name_   | Value range is limited to the named enumeration
-| u8, s8        | Unsigned, signed 8bit integer
-| u16, s16      | Unsigned, signed 16bit integer
-| u32, s32      | Unsigned, signed 32bit integer
-| u64, s64      | Unsigned, signed 64bit integer
-|================================================================
+[options="header"]
+|==================================================================================================
+| Type                             | Description
+| if (_expr_) { ... } else { ... } | Conditional
+| select (_expr_) { ... } _name_   | Tagged union
+| struct _name_                    | Substructure
+| u??, s??                         | Unsigned, signed ??bit integer (e.g. u8 for 8bit unsigned integer)
+|==================================================================================================
 
-=== Arrays
+==== If
 
-Valid values that can be used inside array subscript operation.
+Conditional reading/writing of fields depending on the result of _expr_.
 
-|=================================================
-| _expr_ | Uses result of expression as array size
-| \'str' | Grow array until occurance of str
-| $      | Grow array until end of data is reached
-|=================================================
+----
+u8 version;
+if (version >= 2) {
+   u8 ver2_field;
+}
+if (version >= 3) {
+   u8 ver3_field;
+} else {
+   u8 removed_old_field;
+}
+----
+
+==== Select
+
+Conditionally pack/unpack field depending on the result of _expr_.
+This is identical to tagged union, variant, etc... and generates into union in C.
+
+There may not be duplicate cases inside single select.
+
+----
+u8 type;
+select (type) {
+   0) struct string string (array ...) (| filter ...) (visual hint);
+   1) u1 bool;
+   *) u32 any;
+} value;
+----
+
+==== Arrays
+
+Valid expressions that can be used to define array size during declaration.
+
+[options="header"]
+|========================================================================
+| Expression     | Description
+| _expr_         | Result of expression
+| \'str'         | Grow array until occurance of str in binary data
+| until (_expr_) | Grow array until condition has been reached
+|========================================================================
 
 .Reading length prefixed data
 ----
-num_items: u16 dec;
-items: struct item[num_items];
+u16 num_items dec;
+struct item items[num_items];
 ----
 
 .Reading null terminated string
 ----
-cstr: u8['\0'] str;
+u8 cstr['\0'] str;
 ----
 
-.Reading repeating pattern
+.Reading repeating pattern until we hit stop condition
 ----
-pattern: struct pattern[$];
+struct pattern pattern[until (pattern.last_block)];
 ----
 
-=== Filters
+.Reading repeating pattern until the data ends
+----
+struct pattern pattern[until (false)];
+----
+
+==== Filters
 
 Filters can be used to sanity check and transform data into more sensible
 format while still maintaining compatible data layout for both packing and
@@ -153,35 +213,40 @@ consider contributing your filter to the interpeter. Filters for official
 interepter are implemented as command pairs (Thus filters are merely optional
 dependency in interpeter)
 
-|========================================================================
+[options="header"]
+|============================================================================
+| Filter                        | Description
 | matches(_str_)                | Data matches _str_
+| range(_min_, _max_)           | Data is within the range of _min_ and _max_
 | encoding(_str_, ...)          | Data is encoded with algorithm _str_
 | compression(_str_, ...)       | Data is compressed with algorithm _str_
 | encryption(_str_, _key_, ...) | Data is encrypted with algorithm _str_
-|========================================================================
+|============================================================================
 
 .Validating file headers
 ----
-header: u8[4] | matches('\x7fELF') str;
+u8 header[4] | matches('\x7fELF') str;
 ----
 
 .Decoding strings
 ----
-name: u8[32] | encoding('sjis') str;
+u8 name[32] | encoding('sjis') str;
 ----
 
 .Decompressing data
 ----
-data_sz: u32;
-data: u8[$] | compression('deflate', data_sz) hex;
+u32 data_sz;
+u8 data[until (false)] | compression('deflate', data_sz) hex;
 ----
 
-=== Visual hints
+==== Visual hints
 
 Visual hints can be used to advice tools how data should be presented to
 human, as well as provide small documentation what kind of data to expect.
 
+[options="header"]
 |===========================================
+| Hint      | Description
 | nul       | Do not visualize data
 | dec       | Visualize data as decimal
 | hex       | Visualize data as hexdecimal
@@ -210,25 +275,17 @@ value of _len_ from the length of _str_ if it has been filled. We can also use
 this information to verify that length of _str_ matches the value of _len_, if
 both have been filled.
 ----
-len: u16;
-str: u8[len] str;
+u16 len;
+u8 str[len] str;
 ----
 
 .Parameter relationship
 In packing case, the same rules apply as in array relationship. Implicit
 relationship is formed between _decompressed_sz_ member and compression filter.
 ----
-decompressed_sz: u32 dec;
-data: u8[$] | compression('zlib', decompressed_sz);
+u32 decompressed_sz dec;
+u8 data[until (false)] | compression('zlib', decompressed_sz);
 ----
-
-=== Explicit Relationships
-
-Sometimes we need to form explicit relationships when the structure is more
-complicated.
-
-TODO: When we can actually model FFXI string tables correctly, it will be a
-good example.
 
 == Implementation
 
@@ -240,8 +297,8 @@ as optimizations would be done on the bytecode level instead the source level.
 
 === Validator
 
-Validator takes the output of compiler and checks the bytecode follows a
-standard pattern, and isn't invalid. Having validator pass simplifies the
+Validator takes the output of compiler and checks the bytecode for validity
+and  that it follows a standard pattern. Having validator pass simplifies the
 code of translators, as they can assume their input is valid and don't need to
 do constant error checking. It also helps catch bugs from compiler early on.
 
@@ -256,7 +313,20 @@ To make sure all source level attributes such as mathematical expressions
 can be translated losslessly to target language, the bytecode may contain
 special attributes.
 
-TODO: Document bytecode operations and the predictable pattern here
+[options="header"]
+|=====================================
+| Opcode       | Decimal | Description
+| OP_ADD       | 0       | a + b
+| OP_SUB       | 1       | a - b
+| OP_MUL       | 2       | a * b
+| OP_DIV       | 3       | a / b
+| OP_MOD       | 4       | a % b
+| OP_BIT_AND   | 5       | a & b
+| OP_BIT_OR    | 6       | a \| b
+| OP_BIT_XOR   | 7       | a ^ b
+| OP_BIT_LEFT  | 8       | a << b
+| OP_BIT_RIGHT | 9       | a >> b
+|=====================================
 
 === Translators
 
