@@ -30,7 +30,7 @@ $(bins): %:
 fspec-compiler-native.a: private CFLAGS = -Wno-unusued-parameter
 fspec-compiler-native.a: src/compiler/native.c
 fspec-compiler.a: private CFLAGS = -std=c11
-fspec-compiler.a: src/compiler/compiler.c fspec-compiler-native.a
+fspec-compiler.a: src/compiler/compiler.c src/compiler/expr.lm src/compiler/types.lm fspec-compiler-native.a
 
 fspec-info: private LDLIBS += -lcolm
 fspec-info: src/bin/fspec-info.c fspec-compiler.a fspec-compiler-native.a
