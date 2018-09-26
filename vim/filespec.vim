@@ -31,7 +31,7 @@ syn case match
 syn match fsSpecial display contained "\\\(x\x\+\|\o\{1,3}\|.\|$\)"
 syn match fsString1 "'[^']*'" contains=fsSpecial
 syn match fsString2 '"[^"]*"' contains=fsSpecial
-syn match fsBinary  "b[0-1x]\+"
+syn match fsBinary  "0b[0-1x]\+"
 
 syn match fsBlock    "[{}]"
 syn match fsBracket  "[\[\]]"

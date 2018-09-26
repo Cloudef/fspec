@@ -10,7 +10,10 @@ context number
          token OCT / '0'[0-7]+ /
          token DEC / [0-9]+ /
          token HEX / '0x' xdigit+ /
+         literal `0b
       end
+
+      token BIN / [0-1]+ /
 
       int strtoull(a:str, b:int) = c_strtoull
 
@@ -18,6 +21,7 @@ context number
          value:int
          [`false] { lhs.value = 0 }
       |  [`true] { lhs.value = 1 }
+      |  [`0b BIN] { lhs.value = strtoull($r2, 2) }
       |  [OCT] { lhs.value = strtoull($r1, 8) }
       |  [DEC] { lhs.value = strtoull($r1, 10) }
       |  [HEX] { lhs.value = strtoull($r1, 16) }
