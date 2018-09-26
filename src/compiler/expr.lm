@@ -11,11 +11,11 @@ global RTYPE_STRING:int = 2
 
 context expr
    context enum
-      token EXPR / (any - [,}])+ /
+      token EXPR / (any - [,}]) /
 
       def type
          collapsed:collapser::collapsed
-         [EXPR] {
+         [EXPR+] {
             lhs.collapsed = collapser::collapsestr($r1)
             if (!lhs.collapsed) reject
          }
@@ -23,29 +23,29 @@ context expr
 
    context paren
       literal `( `)
-      token EXPR / (any - [()])+ /
+      token EXPR / (any - [()]) /
 
       def syntax
          [EXPR] | [`( syntax `)]
 
       def type
          collapsed:collapser::collapsed
-         [syntax] {
+         [syntax+] {
             lhs.collapsed = collapser::collapsestr($r1)
             if (!lhs.collapsed) reject
          }
    end
 
    context bracket
-      literal `[ `]
-      token EXPR / (any - '[' - ']')+ /
+      literal `[ `] `? `:
+      token EXPR / (any - '[' - ']' - ':') /
 
       def syntax
-         [EXPR] | [`[ syntax `]]
+         [EXPR] | [`[ syntax `]] | [syntax `? syntax `: syntax]
 
       def type
          collapsed:collapser::collapsed
-         [syntax] {
+         [syntax+] {
             lhs.collapsed = collapser::collapsestr($r1)
             if (!lhs.collapsed) reject
          }
@@ -53,14 +53,14 @@ context expr
 
    context arg
       literal `( `)
-      token EXPR / (any - [(),])+ /
+      token EXPR / (any - [(),]) /
 
       def syntax
          [EXPR] | [`( syntax `)]
 
       def type
          collapsed:collapser::collapsed
-         [syntax] {
+         [syntax+] {
             lhs.collapsed = collapser::collapsestr($r1)
             if (!lhs.collapsed) reject
          }
@@ -372,7 +372,7 @@ context collapser
    |  [`) WS* value] commit { reject }
    |  [`] WS* value] commit { reject }
    |  [lparen tok+ rparen] commit
-   |  [lsquare WS* rsquare] commit
+   |  [lsquare tok+ rsquare] commit
    |  [tok+ question tok+ colon tok+] commit
    |  [otherops] { stack_op(r1.op) }
    |  [value] { stack_value($r1) }

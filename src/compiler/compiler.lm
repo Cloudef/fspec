@@ -76,8 +76,8 @@ context fspec
          literal `select
 
          def item
-            [expr:expr::paren::type `) data:declaration::type]
-         |  [expr:`* `) data:declaration::type]
+            [`* `) data:declaration::type]
+         |  [expr:expr::paren::type `) data:declaration::type]
 
          def type
             name:str
@@ -93,7 +93,7 @@ context fspec
    context declaration
       lex
          ignore / '//' [^\n]* '\n' | space+ /
-         literal `; `| `[ `]
+         literal `: `[ `] `| `;
          token VISUAL / 'nul' | 'dec' | 'hex' | 'str' /
       end
 
@@ -106,11 +106,12 @@ context fspec
          [`| function:reference::function::type]
 
       def length
-         [`[ expr:expr::bracket::type `]]
+         [`[ expr:expr::bracket::type `: slice:expr::bracket::type `]]
+      |  [`[ expr:expr::bracket::type `]]
 
       def extra
          length:collapser::collapsed
-         [length* filter:filter* visual:visual?] {
+         [length* filter:filter* visual:visual? endianess:endianess?] {
             f:str = ''
             for l:length in repeat(r1) {
                if (f != '')
@@ -127,11 +128,11 @@ context fspec
 
       def type
          # enum name <primitive> name <extra>;
-         [cref:`enum WS+ parent:name::type WS+ primitive:primitive::type WS+ name:name::type extra:extra `;] commit
+         [cref:`enum WS+ parent:name::type WS+ primitive:primitive::type WS+ name:name::type extra:extra `;]
          # struct name name <extra>;
-      |  [cref:`struct WS+ parent:name::type WS+ name:name::type extra:extra `;] commit
+      |  [cref:`struct WS+ parent:name::type WS+ name:name::type extra:extra `;]
          # <primitive> name <extra>;
-      |  [primitive:primitive::type WS+ name:name::type extra:extra `;] commit
+      |  [primitive:primitive::type WS+ name:name::type extra:extra `;]
          # select ((thing)) { ... } <extra>; INVALID
       |  [container::select::type extra `;] commit { reject }
          # select ((thing)) { ... } <primitive> name <extra>; INVALID
@@ -139,12 +140,12 @@ context fspec
          # struct (optional) { ... } <primitive> name <extra>; INVALID
       |  [container::strukt::type primitive::type WS+ name::type extra `;] commit { reject }
          # enum (optional) { ... } <primitive> name <extra>;
-      |  [container:container::type primitive:primitive::type WS+ name:name::type extra:extra `;] commit
+      |  [container:container::type primitive:primitive::type WS+ name:name::type extra:extra `;]
          # select ((expr)) { ... } name <extra>;
          # struct (optional) { ... } name <extra>;
       |  [container:container::type name:name::type extra:extra `;]
-         # (enum|struct) name { ... };
-      |  [container:container::type `;]
+         # (enum|struct) name { ... } <(le|be)>;
+      |  [container:container::type endianess:endianess? `;]
    end
 
    def source
@@ -280,7 +281,7 @@ walk(s:fspec::container::type)
    insert($s.data.type, s.data.name, s)
    if ($s.data.type == 'enum') {
       for i:fspec::container::enum::item in repeat(s.data.items) {
-         print('constant `', $i.name, '` = ', $i.value, '\n')
+         print('constant `', $i.name, '` is ', $i.value, '\n')
          insert('variable', $i.name, i)
       }
    } else if ($s.data.type == 'struct') {
@@ -294,14 +295,19 @@ walk(s:fspec::container::type)
       pop_scope()
    } else if ($s.data.type == 'select') {
       push_scope()
+      print('━━━━ start of (', $s.data.select, ') ━━━━\n')
       for d:fspec::container::select::item in repeat(s.data.items) {
-         print('━━━━ ', $d.expr, ' ━━━━\n')
+         if (d.expr)
+            print('━━━━ (', $d.expr, ')\n')
+         else
+            print('━━━━ DEFAULT\n')
+
          if (d.data.name)
             print_declaration(d.data)
          if (d.data.container)
             walk(d.data.container)
       }
-      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
+      print('━━━━ end of (', $s.data.select, ') ━━━━\n')
       pop_scope()
    }
 }
