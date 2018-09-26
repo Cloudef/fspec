@@ -1,0 +1,18 @@
+struct riff_chunk {
+   u8 header[4] str;
+   u32 size;
+   // Needs union, for LIST header there is no data
+   // type: u8[4] str;
+   u8 data[size] hex;
+};
+
+struct riff_header {
+   u8 header[4] str;
+   u32 size;
+   u8 type[4] str;
+};
+
+struct riff {
+   struct riff_header header;
+   struct riff_chunk chunks[until (false)];
+};

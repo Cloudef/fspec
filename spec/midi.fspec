@@ -1,0 +1,14 @@
+struct midi_track {
+  u8 type[4] | matches('MTrk') str;
+  u32 length;
+  u8 data[length];
+};
+
+struct midi {
+  u8 type[4] | matches('MThd') str;
+  u32 length | matches(6);
+  u16 format;
+  u16 track_count;
+  u16 division;
+  struct midi_track tracks[track_count];
+};

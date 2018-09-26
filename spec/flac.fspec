@@ -1,0 +1,172 @@
+enum {
+   STREAMINFO,
+   PADDING,
+   APPLICATION,
+   SEEKTABLE,
+   VORBIS_COMMENT,
+   CUESHEET,
+   PICTURE,
+   INVALID = 127
+};
+
+struct utf8_string {
+   u32 length;
+   u8 string[length] | encoding('utf8') str;
+};
+
+struct ascii_string {
+   u32 length;
+   u8 string[length] | encoding('ascii') str;
+};
+
+struct flac {
+   u8 header[4] | matches('fLaC') str;
+   struct {
+      u1 last_metadata_block;
+      u7 block_type | range(STREAMINFO, INVALID);
+      u24 length;
+      select (block_type) {
+         STREAMINFO)
+            struct {
+               u16 min_block_size_in_samples;
+               u16 max_block_size_in_samples;
+               u24 min_frame_size_in_bytes;
+               u24 max_frame_size_in_bytes;
+               u20 sample_rate_in_hz;
+               u3 channels;
+               u5 bps;
+               u36 total_samples;
+               u128 md5 hex;
+            } streaminfo;
+         PADDING)
+            struct {
+               u8 zero[length] nul;
+            } padding;
+         APPLICATION)
+            struct {
+               u32 id;
+               u8 data[length] hex;
+            } application;
+         SEEKTABLE)
+            struct {
+               struct {
+                  u64 sample_no;
+                  u64 offset_in_bytes;
+                  u16 num_samples;
+               } seekpoint[length / 18];
+            } seektable;
+         VORBIS_COMMENT)
+            struct {
+               struct utf8_string vendor;
+               u32 user_comment_list_length;
+               struct utf8_string user_comment[user_comment_list_length];
+               u1 framing_bit | matches(true);
+            } vorbis_comment le;
+         CUESHEET)
+            struct {
+               u8 catalog[128] | encoding('ascii') str;
+               u64 lead_in_samples;
+               u1 is_compact_disc;
+               u2071 reserved nul;
+               u8 num_tracks;
+               struct {
+                  u64 offset_in_samples;
+                  u8 index;
+                  u8 isrc[12] | encoding('ascii') str;
+                  u1 type;
+                  u1 pre_emphasis;
+                  u110 reserved nul;
+                  u8 num_index_points;
+                  struct {
+                     u64 offset_in_samples;
+                     u8 index;
+                     u24 reserved;
+                  } indices[num_index_points];
+               } track[num_tracks];
+            } cuesheet;
+         PICTURE)
+            struct {
+               u32 type;
+               struct ascii_string mime;
+               struct utf8_string description;
+               u32 width;
+               u32 height;
+               u32 color_depth_in_bps;
+               u32 num_colors_for_indexed;
+               u32 length;
+               u8 data[length] hex;
+            } picture;
+         *)
+            u8 any[length] hex;
+      } data;
+   } metadata[until (metadata.last_metadata_block)];
+   struct {
+      u14 sync_code | matches(b11111111111110);
+      u1 reserved1 nul;
+      u1 blocking_strategy;
+      u4 block_size_in_inter_channel_samples;
+      u4 sample_rate;
+      u4 channel_assignment;
+      u3 sample_size_in_bits;
+      u1 reserved2 nul;
+      select (blocking_stragety) {
+         0) u8 frame[reserved[1]] | encoding('utf8') hex;
+         1) u8 sample['\0':6] | encoding('utf8') hex;
+      } index;
+      select (block_size_in_inter_channel_samples) {
+         b0110) u8 value1;
+         b0111) u16 value2;
+      } block_size_bit;
+      select (sample_rate) {
+         b1100) u8 value_in_kHz;
+         b1101) u16 value_in_Hz;
+         b1110) u16 value_in_tens_of_Hz;
+      } sample_rate_bit;
+      u8 crc_8 hex;
+      struct {
+         u1 padding nul;
+         u6 type;
+         u1 wasted_bits_per_sample[until (wasted_bits_per_sample)];
+         select (type) {
+            // missing verbatim and lpc
+            b000000)
+               struct {
+                  select (sample_size_in_bits) {
+                     b000) u1 v[metadata[0].data.streaminfo.bps];
+                     b001) u8 v8;
+                     b011) u12 v12;
+                     b100) u16 v16;
+                     b101) u20 v20;
+                     b110) u24 v24;
+                  } value;
+               } constant;
+            '001xxxx')
+               struct {
+                  u1 warmup[bps * (type & 7)] hex;
+                  struct {
+                     u2 method_type;
+                     select (method_type) {
+                        b00)
+                           struct {
+                              u4 order;
+                              struct {
+                                 // this format is annoying.. :D
+                                 u1 todo;
+                              } partition;
+                           } partitioned_rice;
+                        b01)
+                           struct {
+                              u4 order;
+                              struct {
+                                 // this format is annoying.. :D
+                                 u1 todo;
+                              } partition;
+                           } partitioned_rice2;
+                     } method;
+                  } residual;
+               } fixed;
+         } data;
+      } subframe;
+      u16 crc_16 hex;
+   } frame[until (false)];
+} be;

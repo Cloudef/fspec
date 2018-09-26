@@ -1,0 +1,5 @@
+struct v {
+   u8 header[4] | matches('CWS\0') str;
+   u32 size dec;
+   u8 data[until(false)] | compression('zlib', size) hex;
+};
