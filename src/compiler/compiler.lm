@@ -4,8 +4,6 @@
 include 'expr.lm'
 
 context fspec
-   token WS / space /
-
    context primitive
       token TYPE_SIGN / [us] /
       token TYPE_BITS / [1-9][0-9]* /
@@ -37,16 +35,19 @@ context fspec
 
          def item
             value:int
-            [name:name::type `= expr::enum::type `, item] { lhs.value = const_int_expr(r3.collapsed) }
-         |  [name:name::type `= expr::enum::type] { lhs.value = const_int_expr(r3.collapsed) }
-         |  [name:name::type `, item] { lhs.value = 0 } # TODO: count
-         |  [name:name::type] { lhs.value = 0 } # TODO: count
+            [name:reference::variable::type `= expr::enum::type `, item] { lhs.value = const_int_expr(r3.collapsed) }
+         |  [name:reference::variable::type `= expr::enum::type] { lhs.value = const_int_expr(r3.collapsed) }
+         |  [name:reference::variable::type `, item] { lhs.value = 0 } # TODO: count
+         |  [name:reference::variable::type] { lhs.value = 0 } # TODO: count
 
          def type
             name:str
             items:item+
             select:expr::paren::type
-            [type:`enum WS+ name::type? `{ item+ `}] { if (name::type in r3) lhs.name = $(name::type in r3) lhs.items = r5 }
+            [type:`enum WS+ reference::variable::type? `{ item+ `}] {
+               for n:reference::variable::type in child(r3)
+               lhs.name = $n lhs.items = r5
+            }
       end
 
       context strukt # <- struct is taken :(
@@ -64,7 +65,10 @@ context fspec
             name:str
             items:item+
             select:expr::paren::type
-            [type:`struct WS+ name::type? `{ item+ `}] { if (name::type in r3) lhs.name = $(name::type in r3) lhs.items = r5 }
+            [type:`struct WS+ reference::variable::type? `{ item+ `}] {
+               for n:reference::variable::type in child(r3) lhs.name = $n
+               lhs.items = r5
+            }
       end
 
       context select
@@ -95,9 +99,13 @@ context fspec
          ignore / '//' [^\n]* '\n' | space+ /
          literal `: `[ `] `| `;
          token VISUAL / 'nul' | 'dec' | 'hex' | 'str' /
+         token ENDIANESS / 'le' | 'be' /
       end
 
       literal `enum `struct
+
+      def endianess
+         [name:ENDIANESS]
 
       def visual
          [name:VISUAL]
@@ -141,22 +149,22 @@ context fspec
 
       def type
          # enum name <primitive> name <extra>;
-         [cref:`enum WS+ parent:name::type WS+ primitive:primitive::type WS+ name:name::type extra:extra `;]
+         [cref:`enum WS+ parent:reference::variable::type WS+ primitive:primitive::type WS+ name:reference::variable::type extra:extra `;]
          # struct name name <extra>;
-      |  [cref:`struct WS+ parent:name::type WS+ name:name::type extra:extra `;]
+      |  [cref:`struct WS+ parent:reference::variable::type WS+ name:reference::variable::type extra:extra `;]
          # <primitive> name <extra>;
-      |  [primitive:primitive::type WS+ name:name::type extra:extra `;]
+      |  [primitive:primitive::type WS+ name:reference::variable::type extra:extra `;]
          # select ((thing)) { ... } <extra>; INVALID
       |  [container::select::type extra `;] commit { reject }
          # select ((thing)) { ... } <primitive> name <extra>; INVALID
-      |  [container::select::type primitive::type WS+ name::type extra `;] commit { reject }
+      |  [container::select::type primitive::type WS+ reference::variable::type extra `;] commit { reject }
          # struct (optional) { ... } <primitive> name <extra>; INVALID
-      |  [container::strukt::type primitive::type WS+ name::type extra `;] commit { reject }
+      |  [container::strukt::type primitive::type WS+ reference::variable::type extra `;] commit { reject }
          # enum (optional) { ... } <primitive> name <extra>;
-      |  [container:container::type primitive:primitive::type WS+ name:name::type extra:extra `;]
+      |  [container:container::type primitive:primitive::type WS+ name:reference::variable::type extra:extra `;]
          # select ((expr)) { ... } name <extra>;
          # struct (optional) { ... } name <extra>;
-      |  [container:container::type name:name::type extra:extra `;]
+      |  [container:container::type name:reference::variable::type extra:extra `;]
          # (enum|struct) name { ... } <(le|be)>;
       |  [container:container::type endianess:endianess? `;]
    end
@@ -173,15 +181,17 @@ if (!source) {
 }
 
 struct scope
+   endianess:str
    names:map<str, map<str, any>>
 end
 
 global g_scopes:list<scope> = new list<scope>()
 
 void
-push_scope() {
+push_scope(endianess:str) {
    s:scope = new scope()
    s->names = new map<str, map<str, any>>()
+   s->endianess = endianess
    g_scopes->push_head(s)
 }
 
@@ -241,10 +251,33 @@ lookup(type:str, name:str)
 }
 
 str
-container_name_str(s:ref<str>) { if (!s) return '<anon>' return s }
+container_name_str(s:str) { if (!s) return '<anon>' return s }
 
 str
-signed_str(s:ref<bool>) { if (s) return 'signed' return 'unsigned' }
+signed_str(s:bool) { if (s) return 'signed' return 'unsigned' }
+
+str
+endianess_str(s:str)
+{
+   if (s == 'be')
+      return 'big-endian'
+   else if (s == 'le')
+      return 'little-endian'
+
+   print('something went wrong!\n')
+   exit(1)
+}
+
+str
+endianess_from_decl(d:fspec::declaration::type)
+{
+   endianess:str = g_scopes->top->endianess
+   if (d.endianess)
+      for e:fspec::declaration::endianess in child(d.endianess) endianess = $e
+   if (d.extra && d.extra.endianess)
+      for e:fspec::declaration::endianess in child(d.extra.endianess) endianess = $e
+   return endianess
+}
 
 void
 print_declaration(d:fspec::declaration::type)
@@ -287,47 +320,56 @@ print_declaration(d:fspec::declaration::type)
 
       for v:fspec::declaration::visual in child(d.extra.visual)
          print('   and it should be visualized as `', $v.name, '`\n')
+
+      print('   the field is in ', endianess_str(endianess_from_decl(d)), ' byte order\n')
    }
 }
 
 void
-walk(s:fspec::container::type)
+walk(d:fspec::declaration::type)
 {
+   if (!d.container) {
+      print('something went wrong!\n')
+      exit(1)
+   }
+
+   s:fspec::container::type = d.container
    insert($s.data.type, s.data.name, s)
+
    if ($s.data.type == 'enum') {
       for i:fspec::container::enum::item in repeat(s.data.items) {
          print('constant `', $i.name, '` is ', $i.value, '\n')
          insert('variable', $i.name, i)
       }
    } else if ($s.data.type == 'struct') {
-      push_scope()
-      for d:fspec::container::strukt::item in repeat(s.data.items) {
-         if (d.data.name)
-            print_declaration(d.data)
-         if (d.data.container)
-            walk(d.data.container)
+      push_scope(endianess_from_decl(d))
+      for i:fspec::container::strukt::item in repeat(s.data.items) {
+         if (i.data.container)
+            walk(i.data)
+         else
+            print_declaration(i.data)
       }
       pop_scope()
    } else if ($s.data.type == 'select') {
-      push_scope()
+      push_scope(endianess_from_decl(d))
       print('━━━━ start of (', $s.data.select, ') ━━━━\n')
-      for d:fspec::container::select::item in repeat(s.data.items) {
-         if (d.expr)
-            print('━━━━ (', $d.expr, ')\n')
+      for i:fspec::container::select::item in repeat(s.data.items) {
+         if (i.expr)
+            print('━━━━ (', $i.expr, ')\n')
          else
             print('━━━━ DEFAULT\n')
 
-         if (d.data.name)
-            print_declaration(d.data)
-         if (d.data.container)
-            walk(d.data.container)
+         if (i.data.container)
+            walk(i.data)
+         else
+            print_declaration(i.data)
       }
       print('━━━━ end of (', $s.data.select, ') ━━━━\n')
       pop_scope()
    }
 }
 
-push_scope()
-for s:fspec::declaration::type in repeat(source.items)
-   walk(s.container)
+push_scope('le')
+for d:fspec::declaration::type in repeat(source.items)
+   walk(d)
 pop_scope()

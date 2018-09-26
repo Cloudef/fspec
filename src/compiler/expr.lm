@@ -69,18 +69,34 @@ end
 
 context reference
    context function
-      literal `( `) `,
+      lex
+         # reserved
+         literal `struct `enum `select
+         literal `nul `dec `hex `str `be `le
+         token PRIMITIVE / [us][1-9][0-9]* /
+         literal `( `) `,
+         token NAME / [a-zA-Z_][a-zA-Z_0-9]* /
+      end
 
       def arg
          [expr::arg::type `, arg] | [expr::arg::type]
 
       def type
-         [name:name::type `( args:arg* `)]
+         [name:NAME WS* `( args:arg* `)]
    end
 
    context variable
+      lex
+         # reserved
+         literal `struct `enum `select
+         literal `until `sizeof
+         literal `nul `dec `hex `str `be `le
+         token PRIMITIVE / [us][1-9][0-9]* /
+         token NAME / [a-zA-Z_][a-zA-Z_0-9]* /
+      end
+
       def type
-         [name:name::type]
+         [name:NAME]
    end
 
    def type
@@ -101,7 +117,6 @@ context collapser
    values:str
    next_is_unary:bool
 
-   token WS / space /
    literal `+ `-
    literal `( `) `+# `-# `! `~ `* `/ `% `#+ `#- `<< `>> `< `> `<= `>= `== `!= `& `^ `| `&& `|| `? `:
    literal `. `[ `]
