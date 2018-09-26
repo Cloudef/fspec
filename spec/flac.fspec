@@ -1,4 +1,4 @@
-enum {
+enum block_type {
    STREAMINFO,
    PADDING,
    APPLICATION,
@@ -23,7 +23,7 @@ struct flac {
    u8 header[4] | matches('fLaC') str;
    struct {
       u1 last_metadata_block;
-      u7 block_type | range(STREAMINFO, INVALID);
+      enum block_type u7 block_type;
       u24 length;
       select (block_type) {
          STREAMINFO)
