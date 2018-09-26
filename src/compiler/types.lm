@@ -5,10 +5,13 @@ token WS / space /
 
 context number
    context unsigned
-      literal `true `false
-      token OCT / '0'[0-7]+ /
-      token DEC / [0-9]+ /
-      token HEX / '0x' xdigit+ /
+      lex
+         literal `true `false
+         token OCT / '0'[0-7]+ /
+         token DEC / [0-9]+ /
+         token HEX / '0x' xdigit+ /
+      end
+
       int strtoull(a:str, b:int) = c_strtoull
 
       def type
@@ -34,11 +37,14 @@ end
 
 context string
    rl ESC / '\\' /
-   token ESC_CHR / ESC [abfnrtv\\'"e] /
-   token ESC_HEX / ESC 'x' xdigit{2} /
-   token ESC_OCT / ESC [0-7]{1,3} /
-   token CHAR / ^cntrl - ['"] - ESC /
-   literal `' `"
+
+   lex
+      literal `' `"
+      token ESC_CHR / ESC [abfnrtv\\'"e] /
+      token ESC_HEX / ESC 'x' xdigit{2} /
+      token ESC_OCT / ESC [0-7]{1,3} /
+      token CHAR / ^cntrl /
+   end
 
    def raw
       [ESC_CHR] # TODO: how to output raw bytes?
