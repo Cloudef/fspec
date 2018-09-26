@@ -105,15 +105,23 @@ context fspec
       def filter
          [`| function:reference::function::type]
 
-      def length
+      def subscript
          [`[ expr:expr::bracket::type `: slice:expr::bracket::type `]]
       |  [`[ expr:expr::bracket::type `]]
 
       def extra
+         # if set, this field has trivial length, otherwise need to read subscripts
          length:collapser::collapsed
-         [length* filter:filter* visual:visual? endianess:endianess?] {
+         [subscript:subscript* filter:filter* visual:visual? endianess:endianess?] {
             f:str = ''
-            for l:length in repeat(r1) {
+            has_slice:bool
+            for l:subscript in repeat(r1) {
+               if (l.slice) {
+                  f = ''
+                  has_slice = true
+                  break
+               }
+
                if (f != '')
                   f = f + '*'
 
@@ -123,7 +131,12 @@ context fspec
                   f = f + '(' + $l.expr.collapsed + ')'
                }
             }
-            lhs.length = collapser::collapsestr(f)
+
+            if (f == '' && !has_slice)
+               f = '1'
+
+            if (f != '')
+               lhs.length = collapser::collapsestr(f)
          }
 
       def type
@@ -260,11 +273,13 @@ print_declaration(d:fspec::declaration::type)
             print('   it has a variable length that needs to be computed with formula `', $d.extra.length, '`\n')
          } else {
             if (d.extra.length.result.value.number) {
-               print('   it has a constant length of `', $d.extra.length.result.value, '`\n')
+               print('   it has a constant length of ', $d.extra.length.result.value, '\n')
             } else if (d.extra.length.result.value.string) {
                print('   its length will increase until pattern `', $d.extra.length.result.value.string.raw, '` has been read from stream\n')
             }
          }
+      } else {
+         print('   the subscripts contain slices, and thus needs some runtime loops to be computed\n')
       }
 
       for f:fspec::declaration::filter in repeat(d.extra.filter)
