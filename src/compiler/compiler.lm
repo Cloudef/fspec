@@ -20,7 +20,7 @@ context fspec
    context container
       context enum
          lex
-            ignore / space+ /
+            ignore / '//' [^\n]* '\n' | space+ /
             literal `= `, `{ `}
          end
 
@@ -47,7 +47,7 @@ context fspec
 
       context strukt # <- struct is taken :(
          lex
-            ignore / space+ /
+            ignore / '//' [^\n]* '\n' | space+ /
             literal `{ `}
          end
 
@@ -64,7 +64,7 @@ context fspec
 
       context select
          lex
-            ignore / space+ /
+            ignore / '//' [^\n]* '\n' | space+ /
             literal `( `) `{ `} `*
          end
 
@@ -86,15 +86,15 @@ context fspec
 
    context declaration
       lex
-         ignore / space+ /
+         ignore / '//' [^\n]* '\n' | space+ /
          literal `; `| `[ `]
+         token VISUAL / 'nul' | 'dec' | 'hex' | 'str' /
       end
 
       literal `enum `struct
-      token VISUAL / 'nul' | 'dec' | 'hex' | 'str' /
 
       def visual
-         [WS+ name:VISUAL]
+         [name:VISUAL]
 
       def filter
          [`| function:reference::function::type]
