@@ -72,40 +72,34 @@ context expr
 end
 
 context reference
-   context function
-      lex
-         # reserved
-         literal `struct `enum `select
-         literal `nul `dec `hex `str `be `le
-         token PRIMITIVE / [us][1-9][0-9]* /
-         literal `( `) `,
-         token NAME / [a-zA-Z_][a-zA-Z_0-9]* /
-      end
+   lex
+      # reserved
+      literal `struct `enum `select
+      literal `nul `dec `hex `str `be `le
+      literal `until `sizeof
+      token PRIMITIVE / [us][1-9][0-9]* /
+      literal `( `) `,
+      token NAME / [a-zA-Z_][a-zA-Z_0-9]* /
+   end
 
+   context function
       def arg
          [expr::arg::type `, arg] | [expr::arg::type]
 
+      def name
+         [`until] | [`sizeof] | [NAME]
+
       def type
-         [name:NAME WS* `( args:arg* `)]
+         [name:name WS* `( args:arg* `)]
    end
 
    context variable
-      lex
-         # reserved
-         literal `struct `enum `select
-         literal `until `sizeof
-         literal `nul `dec `hex `str `be `le
-         token PRIMITIVE / [us][1-9][0-9]* /
-         token NAME / [a-zA-Z_][a-zA-Z_0-9]* /
-      end
-
       def type
          [name:NAME]
    end
 
    def type
-      [function::type]
-   |  [variable::type]
+      [function::type] | [variable::type]
 end
 
 context collapser
@@ -393,13 +387,13 @@ context collapser
    |  [lparen tok+ rparen] commit
    |  [lsquare tok+ rsquare] commit
    |  [tok+ question tok+ colon tok+] commit
-   |  [otherops] { stack_op(r1.op) }
+   |  [otherops] commit { stack_op(r1.op) }
    |  [value] { stack_value($r1) }
    |  [WS] { lhs = nil }
 
    def collapsed
       result:reducer::collapsed
-      [tok*] commit { flush_all() lhs.result = parse reducer::collapsed[values] if (!lhs.result) reject }
+      [tok+] commit { flush_all() lhs.result = parse reducer::collapsed[values] if (!lhs.result) reject }
 
    collapsed
    collapse(s:stream)
