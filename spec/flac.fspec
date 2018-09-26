@@ -110,7 +110,7 @@ struct flac {
       u3 sample_size_in_bits;
       u1 reserved2 nul;
       select (blocking_stragety) {
-         0) u8 frame[reserved[1]] | encoding('utf8') hex;
+         0) u8 frame['\0':7] | encoding('utf8') hex;
          1) u8 sample['\0':6] | encoding('utf8') hex;
       } index;
       select (block_size_in_inter_channel_samples) {
