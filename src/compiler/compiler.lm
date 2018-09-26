@@ -1,0 +1,298 @@
+include 'expr.lm'
+
+context fspec
+   token WS / space /
+
+   context primitive
+      token TYPE_SIGN / [us] /
+      token TYPE_BITS / [1-9][0-9]* /
+      int strtoull(a:str, b:int) = c_strtoull
+
+      def type
+         signed:bool
+         bits:int
+         [TYPE_SIGN TYPE_BITS] {
+            lhs.signed = ($r1 == 's')
+            lhs.bits = strtoull($r2, 10)
+         }
+   end
+
+   context container
+      context enum
+         lex
+            ignore / space+ /
+            literal `= `, `{ `}
+         end
+
+         literal `enum
+
+         int
+         const_int_expr(expr:collapser::collapsed) {
+            if (!expr || !expr.result.value || !expr.result.value.number) reject
+            return expr.result.value.number.value
+         }
+
+         def item
+            value:int
+            [name:name::type `= expr::enum::type `, item] { lhs.value = const_int_expr(r3.collapsed) }
+         |  [name:name::type `= expr::enum::type] { lhs.value = const_int_expr(r3.collapsed) }
+         |  [name:name::type `, item] { lhs.value = 0 } # TODO: count
+         |  [name:name::type] { lhs.value = 0 } # TODO: count
+
+         def type
+            name:str
+            items:item+
+            [type:`enum WS+ name::type? `{ item+ `}] { if (name::type in r3) lhs.name = $(name::type in r3) lhs.items = r5 }
+      end
+
+      context strukt # <- struct is taken :(
+         lex
+            ignore / space+ /
+            literal `{ `}
+         end
+
+         literal `struct
+
+         def item
+            [data:declaration::type]
+
+         def type
+            name:str
+            items:item+
+            [type:`struct WS+ name::type? `{ item+ `}] { if (name::type in r3) lhs.name = $(name::type in r3) lhs.items = r5 }
+      end
+
+      context select
+         lex
+            ignore / space+ /
+            literal `( `) `{ `} `*
+         end
+
+         literal `select
+
+         def item
+            [expr:expr::paren::type `) data:declaration::type]
+         |  [expr:`* `) data:declaration::type]
+
+         def type
+            name:str
+            items:item+ # BUG: marking item+ with items: in the match below causes weird behaviour
+            [type:`select `( expr::paren::type `) `{ item+ `}] { lhs.items = r6 }
+      end
+
+      def type
+         [data:enum::type] | [data:strukt::type] | [data:select::type]
+   end
+
+   context declaration
+      lex
+         ignore / space+ /
+         literal `; `| `[ `]
+      end
+
+      literal `enum `struct
+      token VISUAL / 'nul' | 'dec' | 'hex' | 'str' /
+
+      def visual
+         [WS+ name:VISUAL]
+
+      def filter
+         [`| function:reference::function::type]
+
+      def length
+         [`[ expr:expr::bracket::type `]]
+
+      def extra
+         length:collapser::collapsed
+         [length* filter:filter* visual:visual?] {
+            f:str = ''
+            for l:length in repeat(r1) {
+               if (f != '')
+                  f = f + '*'
+
+               if (l.expr.collapsed.result.value) {
+                  f = f + '(' + $l.expr.collapsed.result.value + ')'
+               } else {
+                  f = f + '(' + $l.expr.collapsed + ')'
+               }
+            }
+            lhs.length = collapser::collapsestr(f)
+         }
+
+      def type
+         # enum name <primitive> name <extra>;
+         [cref:`enum WS+ parent:name::type WS+ primitive:primitive::type WS+ name:name::type extra:extra `;] commit
+         # struct name name <extra>;
+      |  [cref:`struct WS+ parent:name::type WS+ name:name::type extra:extra `;] commit
+         # <primitive> name <extra>;
+      |  [primitive:primitive::type WS+ name:name::type extra:extra `;] commit
+         # select ((thing)) { ... } <extra>; INVALID
+      |  [container::select::type extra `;] commit { reject }
+         # select ((thing)) { ... } <primitive> name <extra>; INVALID
+      |  [container::select::type primitive::type WS+ name::type extra `;] commit { reject }
+         # struct (optional) { ... } <primitive> name <extra>; INVALID
+      |  [container::strukt::type primitive::type WS+ name::type extra `;] commit { reject }
+         # enum (optional) { ... } <primitive> name <extra>;
+      |  [container:container::type primitive:primitive::type WS+ name:name::type extra:extra `;] commit
+         # select ((expr)) { ... } name <extra>;
+         # struct (optional) { ... } name <extra>;
+      |  [container:container::type name:name::type extra:extra `;]
+         # (enum|struct) name { ... };
+      |  [container:container::type `;]
+   end
+
+   def source
+      [items:declaration::type*] commit
+end
+
+parse source:fspec::source[stdin]
+
+if (!source) {
+   print(error)
+   exit(1)
+}
+
+struct scope
+   names:map<str, map<str, any>>
+end
+
+global g_scopes:list<scope> = new list<scope>()
+
+void
+push_scope() {
+   s:scope = new scope()
+   s->names = new map<str, map<str, any>>()
+   g_scopes->push_head(s)
+}
+
+void
+pop_scope()
+{
+   g_scopes->pop_head()
+}
+
+any
+lookup_no_error(type:str, name:str) {
+   for s:scope in g_scopes {
+      cmap:map<str, any> = s->names->find(type)
+      if (cmap) {
+         var:any = cmap->find(name)
+         if (var)
+            return var
+      }
+   }
+   return nil
+}
+
+any
+insert(type:str, name:str, var:any)
+{
+   if (!name)
+      return var # <anon>
+
+   if (type != 'variable' && lookup_no_error(type, name)) {
+      print('`', type, ' ', name, '` is already declared as a `', type, '` in current scope!\n')
+      exit(1)
+   }
+
+   cmap:map<str, any> = g_scopes->top->names->find(type)
+
+   if (!cmap) {
+      cmap = new map<str, any>()
+   } else if (cmap->find(name)) {
+      print('`', type, ' ', name, '` is already declared as a `', type, '` in current scope!\n')
+      exit(1)
+   }
+
+   cmap->insert(name, var)
+   g_scopes->top->names->insert(type, cmap)
+   return var
+}
+
+any
+lookup(type:str, name:str)
+{
+   r:any = lookup_no_error(type, name)
+   if (!r) {
+      print('`', type, ' ', name, '` is not declared in this or outer scope!\n')
+      exit(1)
+   }
+   return r
+}
+
+str
+container_name_str(s:ref<str>) { if (!s) return '<anon>' return s }
+
+str
+signed_str(s:ref<bool>) { if (s) return 'signed' return 'unsigned' }
+
+void
+print_declaration(d:fspec::declaration::type)
+{
+   insert('variable', $d.name, d)
+   print('variable `', $d.name, '` is ')
+
+   c:fspec::container::type
+   if (d.cref) c = lookup($d.cref, $d.parent) else c = d.container
+
+   if (c)
+      print('`', c.data.type, ' ', container_name_str(c.data.name), '` ')
+
+   if (d.primitive)
+      print(d.primitive.bits, ' bits and ', signed_str(d.primitive.signed))
+
+   print('\n')
+
+   if (d.extra) {
+      if (d.extra.length) {
+         if (!d.extra.length.result.value || d.extra.length.result.value.reference) {
+            print('   it has a variable length that needs to be computed with formula `', $d.extra.length, '`\n')
+         } else {
+            if (d.extra.length.result.value.number) {
+               print('   it has a constant length of `', $d.extra.length.result.value, '`\n')
+            } else if (d.extra.length.result.value.string) {
+               print('   its length will increase until pattern `', $d.extra.length.result.value.string.raw, '` has been read from stream\n')
+            }
+         }
+      }
+
+      for f:fspec::declaration::filter in repeat(d.extra.filter)
+         print('   it needs to be filtered with `', $f.function, '`\n')
+
+      for v:fspec::declaration::visual in child(d.extra.visual)
+         print('   and it should be visualized as `', $v.name, '`\n')
+   }
+}
+
+void
+walk(s:fspec::container::type)
+{
+   insert($s.data.type, s.data.name, s)
+   if ($s.data.type == 'enum') {
+      for i:fspec::container::enum::item in repeat(s.data.items)
+         insert('variable', $i.name, i)
+   } else if ($s.data.type == 'struct') {
+      push_scope()
+      for d:fspec::container::strukt::item in repeat(s.data.items) {
+         if (d.data.container)
+            walk(d.data.container)
+         if (d.data.name)
+            print_declaration(d.data)
+      }
+      pop_scope()
+   } else if ($s.data.type == 'select') {
+      push_scope()
+      for d:fspec::container::select::item in repeat(s.data.items) {
+         if (d.data.container)
+            walk(d.data.container)
+         if (d.data.name)
+            print_declaration(d.data)
+      }
+      pop_scope()
+   }
+}
+
+push_scope()
+for s:fspec::declaration::type in repeat(source.items)
+   walk(s.container)
+pop_scope()

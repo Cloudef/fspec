@@ -1,0 +1,410 @@
+include 'types.lm'
+
+global RTYPE_UNKNOWN:int = 0
+global RTYPE_NUMBER:int = 1
+global RTYPE_STRING:int = 2
+
+context expr
+   context enum
+      token EXPR / (any - [,}])+ /
+
+      def type
+         collapsed:collapser::collapsed
+         [EXPR] {
+            lhs.collapsed = collapser::collapsestr($r1)
+            if (!lhs.collapsed) reject
+         }
+   end
+
+   context paren
+      literal `( `)
+      token EXPR / (any - [()])+ /
+
+      def syntax
+         [EXPR] | [`( syntax `)]
+
+      def type
+         collapsed:collapser::collapsed
+         [syntax] {
+            lhs.collapsed = collapser::collapsestr($r1)
+            if (!lhs.collapsed) reject
+         }
+   end
+
+   context bracket
+      literal `[ `]
+      token EXPR / (any - '[' - ']')+ /
+
+      def syntax
+         [EXPR] | [`[ syntax `]]
+
+      def type
+         collapsed:collapser::collapsed
+         [syntax] {
+            lhs.collapsed = collapser::collapsestr($r1)
+            if (!lhs.collapsed) reject
+         }
+   end
+
+   context arg
+      literal `( `)
+      token EXPR / (any - [(),])+ /
+
+      def syntax
+         [EXPR] | [`( syntax `)]
+
+      def type
+         collapsed:collapser::collapsed
+         [syntax] {
+            lhs.collapsed = collapser::collapsestr($r1)
+            if (!lhs.collapsed) reject
+         }
+   end
+end
+
+context reference
+   context function
+      literal `( `) `,
+
+      def arg
+         [expr::arg::type `, arg] | [expr::arg::type]
+
+      def type
+         [name:name::type `( args:arg* `)]
+   end
+
+   context variable
+      def type
+         [name:name::type]
+   end
+
+   def type
+      [function::type]
+   |  [variable::type]
+end
+
+context collapser
+   # BUG: lists seem to not really work well here
+   #      implement simple native stack
+   int op_stack_new() = c_op_stack_new
+   int op_stack_free(stack:int) = c_op_stack_free
+   str op_stack_top(stack:int) = c_op_stack_top
+   bool op_stack_push(stack:int, op:str) = c_op_stack_push
+   str op_stack_pop(stack:int) = c_op_stack_pop
+
+   stack:int
+   values:str
+   next_is_unary:bool
+
+   token WS / space /
+   literal `+ `-
+   literal `( `) `+# `-# `! `~ `* `/ `% `#+ `#- `<< `>> `< `> `<= `>= `== `!= `& `^ `| `&& `|| `? `:
+   literal `. `[ `]
+   literal `sizeof
+
+   def unary_unambi
+      [`!] | [`~]
+
+   def binary_unambi
+      [`.] | [`*] | [`/] | [`%] | [`<<] | [`>>] | [`<] | [`>] | [`<=] | [`>=] | [`==] | [`!=] | [`&] | [`^] | [`|] | [`&&] | [`||]
+
+   def ternary
+      [`:]
+
+   context reducer
+      int modulo(a:int, b:int) = c_modulo
+      int bitnot(a:int) = c_bitnot
+      int bitand(a:int, b:int) = c_bitand
+      int bitor(a:int, b:int) = c_bitor
+      int bitxor(a:int, b:int) = c_bitxor
+      int shiftl(a:int, b:int) = c_shiftl
+      int shiftr(a:int, b:int) = c_shiftr
+      int subscript(a:str, b:int) = c_subscript
+
+      def builtin
+         value:value
+         [`sizeof `( string::type `)] { lhs.value = parse value[$r3.length] }
+
+      def value
+         rtype:int
+         [builtin:builtin] { lhs = r1.value }
+      |  [number:number::type] { lhs.rtype = RTYPE_NUMBER }
+      |  [string:string::type] { lhs.rtype = RTYPE_STRING }
+      |  [reference:reference::type]
+
+      def unary
+         [`+#] | [`-#] | [unary_unambi]
+
+      def binary
+         [`#+] | [`#-] | [binary_unambi]
+
+      def anynary
+         [unary] | [binary] | [ternary]
+
+      def numop
+         value:value
+         [number::type WS `-#] { lhs.value = parse value[$(r1.value - (r1.value * 2))] }
+      |  [number::type WS `+#] { lhs.value = parse value[$r1.value] }
+      |  [number::type WS `!] { r:int = 0 if (r1.value == 0) r = 1 lhs.value = parse value[$r] }
+      |  [number::type WS `~] { lhs.value = parse value[$bitnot(r1.value)] }
+      |  [number::type WS number::type WS `*] { lhs.value = parse value[$(r1.value * r3.value)] }
+      |  [number::type WS number::type WS `/] { lhs.value = parse value[$(r1.value / r3.value)] }
+      |  [number::type WS number::type WS `#+] { lhs.value = parse value[$(r1.value + r3.value)] }
+      |  [number::type WS number::type WS `#-] { lhs.value = parse value[$(r1.value - r3.value)] }
+      |  [number::type WS number::type WS `<<] { lhs.value = parse value[$shiftl(r1.value, r3.value)] }
+      |  [number::type WS number::type WS `>>] { lhs.value = parse value[$shiftr(r1.value, r3.value)] }
+      |  [number::type WS number::type WS `<] { r:int = 0 if (r1.value < r3.value) r = 1 lhs.value = parse value[$r] }
+      |  [number::type WS number::type WS `>] { r:int = 0 if (r1.value > r3.value) r = 1 lhs.value = parse value[$r] }
+      |  [number::type WS number::type WS `<=] { r:int = 0 if (r1.value <= r3.value) r = 1 lhs.value = parse value[$r] }
+      |  [number::type WS number::type WS `>=] { r:int = 0 if (r1.value >= r3.value) r = 1 lhs.value = parse value[$r] }
+      |  [number::type WS number::type WS `==] { r:int = 0 if (r1.value == r3.value) r = 1 lhs.value = parse value[$r] }
+      |  [number::type WS number::type WS `!=] { r:int = 0 if (r1.value != r3.value) r = 1 lhs.value = parse value[$r] }
+      |  [number::type WS number::type WS `&] { lhs.value = parse value[$bitand(r1.value, r3.value)] }
+      |  [number::type WS number::type WS `^] { lhs.value = parse value[$bitxor(r1.value, r3.value)] }
+      |  [number::type WS number::type WS `|] { lhs.value = parse value[$bitor(r1.value, r3.value)] }
+      |  [number::type WS number::type WS `&&] { r:int = 0 if (r1.value && r3.value) r = 1 lhs.value = parse value[$r] }
+      |  [number::type WS number::type WS `||] { r:int = 0 if (r1.value || r3.value) r = 1 lhs.value = parse value[$r] }
+      |  [number::type WS number::type WS number::type WS `:] { if (r1.value) lhs.value = parse value[$r3] else lhs.value = parse value[$r5] }
+      |  [number::type WS value WS `]] commit { reject }
+
+      # strings can only be operated with `!= and `== against other strings
+      def stringop
+         value:value
+         [string::type WS string::type WS `==] commit { r:int = 0 if (r1.raw == r3.raw) r = 1 lhs.value = parse value[$r] }
+      |  [string::type WS string::type WS `!=] commit { r:int = 0 if (r1.raw != r3.raw) r = 1 lhs.value = parse value[$r] }
+      |  [number::type WS string::type WS string::type WS `:] { if (r1.value) lhs.value = parse value[$r3] else lhs.value = parse value[$r5] }
+      |  [string::type WS unary] commit { reject } # <unary> str
+      |  [string::type WS number::type WS binary] commit { reject } # str <binary> num
+      |  [number::type WS string::type WS binary] commit { reject } # num <binary> str
+      |  [string::type WS string::type WS binary] { reject } # str <math> str
+      |  [value WS number::type WS string::type WS ternary] commit { reject } # (v ? num : str)
+      |  [value WS string::type WS number::type WS ternary] commit { reject } # (v ? str : num)
+      |  [string::type WS value WS value WS ternary] commit { reject } # (str ? v : v)
+      |  [string::type WS number::type WS `]] {
+         if (r1.length <= r3.value) {
+            print('subscript out of bounds\n')
+            reject
+         } else {
+            lhs.value = parse value[$subscript($r1.raw, r3.value)]
+         }
+      }
+
+      def valueop
+         rtype:int
+         [value WS value WS `]] { lhs.rtype = RTYPE_NUMBER }
+      |  [value WS unary] { lhs.rtype = RTYPE_NUMBER }
+      |  [value WS value WS binary] { lhs.rtype = RTYPE_NUMBER }
+      |  [value WS value WS value WS ternary] { if (r3.rtype != r5.rtype) reject lhs.rtype = r1.rtype }
+
+      def operation
+         rtype:int
+          [numop] { lhs = parse operation[$r1.value] }
+       |  [stringop] { lhs = parse operation[$r1.value] }
+       |  [valueop] { lhs.rtype = r1.rtype }
+       |  [value] { lhs.rtype = r1.rtype }
+       |  [value WS] { lhs.rtype = r1.rtype }
+       |  [operation WS] { lhs.rtype = r1.rtype }
+       |  [operation anynary] { lhs.rtype = r1.rtype }
+
+      def collapsed
+         value:value
+         [operation+] commit {
+            # we check return type of every operation to make sure we don't operate on different types
+            rtype:int = RTYPE_UNKNOWN
+            for i:operation in repeat(r1) {
+               if (i.rtype != RTYPE_UNKNOWN && rtype != RTYPE_UNKNOWN && i.rtype != rtype)
+                  reject
+               rtype = i.rtype
+            }
+            lhs.value = parse value[$lhs]
+         }
+   end
+
+   def operator
+      precedence:int
+      rassoc:bool
+      open:str
+      close:str
+      args:int
+      [`[]  { lhs.precedence = 0  lhs.rassoc = false lhs.args = 0 lhs.open = ']' }
+   |  [`]]  { lhs.precedence = 0  lhs.rassoc = false lhs.args = 2 lhs.close = '[' }
+   |  [`(]  { lhs.precedence = 0  lhs.rassoc = false lhs.args = 0 lhs.open = ')' }
+   |  [`)]  { lhs.precedence = 0  lhs.rassoc = false lhs.args = 0 lhs.close = '(' }
+   |  [`.]  { lhs.precedence = 0  lhs.rassoc = false lhs.args = 2 }
+   |  [`+#] { lhs.precedence = 1  lhs.rassoc = true  lhs.args = 1 }
+   |  [`-#] { lhs.precedence = 1  lhs.rassoc = true  lhs.args = 1 }
+   |  [`!]  { lhs.precedence = 1  lhs.rassoc = true  lhs.args = 1 }
+   |  [`~]  { lhs.precedence = 1  lhs.rassoc = true  lhs.args = 1 }
+   |  [`*]  { lhs.precedence = 2  lhs.rassoc = false lhs.args = 2 }
+   |  [`/]  { lhs.precedence = 2  lhs.rassoc = false lhs.args = 2 }
+   |  [`%]  { lhs.precedence = 2  lhs.rassoc = false lhs.args = 2 }
+   |  [`#+] { lhs.precedence = 3  lhs.rassoc = false lhs.args = 2 }
+   |  [`#-] { lhs.precedence = 3  lhs.rassoc = false lhs.args = 2 }
+   |  [`<<] { lhs.precedence = 4  lhs.rassoc = false lhs.args = 2 }
+   |  [`>>] { lhs.precedence = 4  lhs.rassoc = false lhs.args = 2 }
+   |  [`<]  { lhs.precedence = 5  lhs.rassoc = false lhs.args = 2 }
+   |  [`>]  { lhs.precedence = 5  lhs.rassoc = false lhs.args = 2 }
+   |  [`<=] { lhs.precedence = 5  lhs.rassoc = false lhs.args = 2 }
+   |  [`>=] { lhs.precedence = 5  lhs.rassoc = false lhs.args = 2 }
+   |  [`==] { lhs.precedence = 6  lhs.rassoc = false lhs.args = 2 }
+   |  [`!=] { lhs.precedence = 6  lhs.rassoc = false lhs.args = 2 }
+   |  [`&]  { lhs.precedence = 7  lhs.rassoc = false lhs.args = 2 }
+   |  [`^]  { lhs.precedence = 8  lhs.rassoc = false lhs.args = 2 }
+   |  [`|]  { lhs.precedence = 9  lhs.rassoc = false lhs.args = 2 }
+   |  [`&&] { lhs.precedence = 10 lhs.rassoc = false lhs.args = 2 }
+   |  [`||] { lhs.precedence = 11 lhs.rassoc = false lhs.args = 2 }
+   |  [`?]  { lhs.precedence = 12 lhs.rassoc = true  lhs.args = 0 lhs.open = ':' }
+   |  [`:]  { lhs.precedence = 12 lhs.rassoc = true  lhs.args = 3 }
+
+   void
+   operate(op:operator)
+   {
+      if (!op.args)
+         return 0
+
+      s:str = values + $op
+      # print('collapse: ', s, ' -> ')
+      r:reducer::collapsed = parse reducer::collapsed[s]
+
+      if (!r) {
+         reject
+      } else {
+         # print(^r, '\n')
+         values = $r + ' '
+      }
+   }
+
+   void
+   flush_all()
+   {
+      while (op_stack_top(stack))
+         operate(parse operator[op_stack_pop(stack)])
+   }
+
+   void
+   flush_until(name:str)
+   {
+      while (op_stack_top(stack) && op_stack_top(stack) != name)
+         operate(parse operator[op_stack_pop(stack)])
+   }
+
+   void
+   flush_ordered(name:str)
+   {
+      op:operator = parse operator[name]
+
+      top:operator
+      if (op_stack_top(stack)) top = parse operator[op_stack_top(stack)]
+      while (top && (top.precedence < op.precedence || (top.precedence == op.precedence && !top.rassoc)) && !top.open) {
+         operate(parse operator[op_stack_pop(stack)])
+         if (op_stack_top(stack)) top = parse operator[op_stack_top(stack)] else top = nil
+      }
+
+      if (op.close)
+         flush_until(op.close)
+
+      next_is_unary = !op.close
+   }
+
+   void
+   stack_op(name:str)
+   {
+      flush_ordered(name)
+      # print('push op: ', name, '\n')
+      op_stack_push(stack, name)
+   }
+
+   void
+   stack_value(value:str)
+   {
+      # print('push value: ', value, '\n')
+      values = values + value + ' '
+      next_is_unary = false
+   }
+
+   def value
+      [reducer::builtin] | [number::unsigned::type] | [string::type] | [reference::type]
+
+   def ambiguous
+      [`+] | [`-]
+
+   def unambiguous
+      [unary_unambi] | [binary_unambi]
+
+   def binary
+      [ambiguous] | [binary_unambi]
+
+   def otherops
+      op:str
+      [ambiguous] { if (next_is_unary) lhs.op = $r1 + '#' else lhs.op = '#' + $r1 }
+   |  [unambiguous] { lhs.op = $r1 }
+
+   def lsquare
+      [`[] { stack_op($lhs) }
+
+   def rsquare
+      [`]] { stack_op($lhs) }
+
+   def lparen
+      [`(] { stack_op($lhs) }
+
+   def rparen
+      [`)] { stack_op($lhs) }
+
+   def question
+      [`?] { stack_op($lhs) }
+
+   def colon
+      [`:] { stack_op($lhs) }
+
+   def constant
+      [number::unsigned::type] | [string::type]
+
+   def tok#en
+      [value WS+ value] commit { reject }
+   |  [binary WS* binary] commit { reject }
+   |  [constant WS* `(] commit { reject }
+   |  [`) WS* value] commit { reject }
+   |  [`] WS* value] commit { reject }
+   |  [lparen tok+ rparen] commit
+   |  [lsquare WS* rsquare] commit
+   |  [tok+ question tok+ colon tok+] commit
+   |  [otherops] { stack_op(r1.op) }
+   |  [value] { stack_value($r1) }
+   |  [WS] { lhs = nil }
+
+   def collapsed
+      result:reducer::collapsed
+      [tok*] commit { flush_all() lhs.result = parse reducer::collapsed[values] if (!lhs.result) reject }
+
+   collapsed
+   collapse(s:stream)
+   {
+      c:collapser = new collapser()
+      c->stack = op_stack_new()
+      c->values = ''
+      c->next_is_unary = true
+      parse r:collapsed(c)[s]
+      op_stack_free(c->stack)
+      return r
+   }
+
+   collapsed
+   collapsestr(s:str)
+   {
+      c:collapser = new collapser()
+      c->stack = op_stack_new()
+      c->values = ''
+      c->next_is_unary = true
+      parse r:collapsed(c)[s]
+      op_stack_free(c->stack)
+      return r
+   }
+end
+
+# r:collapser::collapsed = collapser::collapse(stdin)
+# if (r) {
+#    print($r.result, '\n')
+# } else {
+#    print('invalid expression\n')
+# }
