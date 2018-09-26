@@ -18,5 +18,5 @@ struct spell {
 };
 
 struct dat {
-   struct spell spell[$];
+   struct spell spell[until (false)];
 };

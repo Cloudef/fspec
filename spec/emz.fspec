@@ -3,5 +3,5 @@ struct emz {
    u32 unknown hex; // most likely redunancy check (crc32?)
    u32 size;
    u32 offset; // always 16?
-   u8 data[$] | compression('deflate', size) hex;
+   u8 data[until (false)] | compression('deflate', size) hex;
 };

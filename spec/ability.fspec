@@ -4,11 +4,8 @@ struct ability {
    u16 mp_cost;
    u16 unknown;
    u16 targets;
-   u8 name[32] | necoding('sjis') str; // The encoding actually depends on ROM region
+   u8 name[32] | encoding('sjis') str; // The encoding actually depends on ROM region
    u8 description[256] | encoding('sjis') str; // ^ Ditto, we can't express this (we need parser options)
    u8 padding[726] nul;
-};
-
-struct dat {
-   struct ability ability[$];
+   struct ability ability[until (false)];
 };

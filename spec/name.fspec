@@ -4,5 +4,5 @@ struct name {
 };
 
 struct dat {
-   struct name name[$];
+   struct name name[until (false)];
 };
