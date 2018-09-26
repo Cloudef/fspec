@@ -140,7 +140,7 @@ struct flac {
                      b110) u24 v24;
                   } value;
                } constant;
-            '001xxxx')
+            testbits(type, '001xxxx'))
                struct {
                   u1 warmup[bps * (type & 7)] hex;
                   struct {
