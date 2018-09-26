@@ -45,6 +45,7 @@ context fspec
          def type
             name:str
             items:item+
+            select:expr::paren::type
             [type:`enum WS+ name::type? `{ item+ `}] { if (name::type in r3) lhs.name = $(name::type in r3) lhs.items = r5 }
       end
 
@@ -62,6 +63,7 @@ context fspec
          def type
             name:str
             items:item+
+            select:expr::paren::type
             [type:`struct WS+ name::type? `{ item+ `}] { if (name::type in r3) lhs.name = $(name::type in r3) lhs.items = r5 }
       end
 
@@ -80,7 +82,8 @@ context fspec
          def type
             name:str
             items:item+ # BUG: marking item+ with items: in the match below causes weird behaviour
-            [type:`select `( expr::paren::type `) `{ item+ `}] { lhs.items = r6 }
+            select:expr::paren::type
+            [type:`select `( expr::paren::type `) `{ item+ `}] { lhs.select = r3 lhs.items = r6 }
       end
 
       def type
@@ -238,8 +241,12 @@ print_declaration(d:fspec::declaration::type)
    c:fspec::container::type
    if (d.cref) c = lookup($d.cref, $d.parent) else c = d.container
 
-   if (c)
+   if (c) {
       print('`', c.data.type, ' ', container_name_str(c.data.name), '` ')
+
+      if (c.data.select)
+         print('with expression `', $c.data.select, '` ')
+   }
 
    if (d.primitive)
       print(d.primitive.bits, ' bits and ', signed_str(d.primitive.signed))
@@ -272,25 +279,29 @@ walk(s:fspec::container::type)
 {
    insert($s.data.type, s.data.name, s)
    if ($s.data.type == 'enum') {
-      for i:fspec::container::enum::item in repeat(s.data.items)
+      for i:fspec::container::enum::item in repeat(s.data.items) {
+         print('constant `', $i.name, '` = ', $i.value, '\n')
          insert('variable', $i.name, i)
+      }
    } else if ($s.data.type == 'struct') {
       push_scope()
       for d:fspec::container::strukt::item in repeat(s.data.items) {
-         if (d.data.container)
-            walk(d.data.container)
          if (d.data.name)
             print_declaration(d.data)
+         if (d.data.container)
+            walk(d.data.container)
       }
       pop_scope()
    } else if ($s.data.type == 'select') {
       push_scope()
       for d:fspec::container::select::item in repeat(s.data.items) {
-         if (d.data.container)
-            walk(d.data.container)
+         print('━━━━ ', $d.expr, ' ━━━━\n')
          if (d.data.name)
             print_declaration(d.data)
+         if (d.data.container)
+            walk(d.data.container)
       }
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
       pop_scope()
    }
 }
