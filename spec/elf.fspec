@@ -1,13 +1,7 @@
-struct elf32 {
-   u32 e_entry hex;
-   u32 e_phoff;
-   u32 e_shoff;
-};
-
-struct elf64 {
-   u64 e_entry hex;
-   u64 e_phoff;
-   u64 e_shoff;
+enum {
+   CLASS_NONE,
+   CLASS_32,
+   CLASS_64
 };
 
 struct elf {
@@ -22,8 +16,16 @@ struct elf {
    u16 e_machine hex;
    u32 e_version;
    select (ei_class) {
-      1) struct elf32 elf32;
-      2) struct elf64 elf64;
+      CLASS_32) struct {
+            u32 e_entry hex;
+            u32 e_phoff;
+            u32 e_shoff;
+         } elf32;
+      CLASS_64) struct {
+            u64 e_entry hex;
+            u64 e_phoff;
+            u64 e_shoff;
+         } elf64;
    } arch;
    u32 e_flags hex;
    u16 e_ehsz;
