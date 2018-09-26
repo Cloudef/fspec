@@ -23,7 +23,7 @@ context expr
 
    context paren
       literal `( `)
-      token EXPR / (any - [()]) /
+      token EXPR / any /
 
       def syntax
          [EXPR] | [`( syntax `)]
@@ -37,8 +37,10 @@ context expr
    end
 
    context bracket
-      literal `[ `] `? `:
-      token EXPR / (any - '[' - ']' - ':') /
+      lex
+         literal `[ `] `? `:
+         token EXPR / any /
+      end
 
       def syntax
          [EXPR] | [`[ syntax `]] | [syntax `? syntax `: syntax]
@@ -52,8 +54,10 @@ context expr
    end
 
    context arg
-      literal `( `)
-      token EXPR / (any - [(),]) /
+      lex
+         literal `( `) `,
+         token EXPR / any /
+      end
 
       def syntax
          [EXPR] | [`( syntax `)]
