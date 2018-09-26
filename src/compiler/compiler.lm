@@ -1,3 +1,6 @@
+# Filespec compiler
+# Takes in fspec source code and outputs bytecode for further processing
+
 include 'expr.lm'
 
 context fspec

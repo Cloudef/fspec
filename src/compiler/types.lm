@@ -1,3 +1,6 @@
+# Basic (mostly) langauge independent types
+# These are the foundation for understanding the source code
+
 context number
    context unsigned
       literal `true `false

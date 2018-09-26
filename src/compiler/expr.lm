@@ -1,3 +1,8 @@
+# Expression parser && collapser
+# This lets us know what kind of operations we need to compile in.
+# But it also collapses the expressions offline, so we don't have to compile in constant expressions
+# This makes the compiler "useful"
+
 include 'types.lm'
 
 global RTYPE_UNKNOWN:int = 0
