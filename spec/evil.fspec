@@ -1,0 +1,28 @@
+struct metadata {
+   u2 lel;
+   enum {
+      STR_TERMINATED,
+      STR_DELIMITED
+   } u1 type;
+   struct {
+      u8 smth;
+   } test;
+   u8 encoding[32][sizeof("foo")];
+   u1 blaz[builtin(1, 2, "foo", 'bar')] | hellothere('foobar', 1, 2, "faa");
+};
+
+struct utf8_string {
+   struct metadata metadata;
+   select (((metadata.type))) {
+      metadata.STR_TERMINATED)
+         struct {
+            u8 string['\0'] | encoding(metadata.encoding) str;
+         } terminated;
+      metadata.STR_DELIMITED)
+         struct {
+            u32 length;
+            u8 string[length] | encoding(metadata.encoding) str;
+         } delimited;
+   } data;
+   u1 foo[((((metadata.test.smth)))) + 5 + 2][4];
+};
