@@ -151,7 +151,7 @@ context fspec
                f = '1'
 
             if (f != '')
-               lhs.length = collapser::collapsestr(f)
+               lhs.length = collapser::stream(f)
          }
 
       def type

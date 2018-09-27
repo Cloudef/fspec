@@ -16,7 +16,7 @@ context expr
       def type
          collapsed:collapser::collapsed
          [EXPR+] {
-            lhs.collapsed = collapser::collapsestr($r1)
+            lhs.collapsed = collapser::stream($r1)
             if (!lhs.collapsed) reject
          }
    end
@@ -31,7 +31,7 @@ context expr
       def type
          collapsed:collapser::collapsed
          [syntax+] {
-            lhs.collapsed = collapser::collapsestr($r1)
+            lhs.collapsed = collapser::stream($r1)
             if (!lhs.collapsed) reject
          }
    end
@@ -48,7 +48,7 @@ context expr
       def type
          collapsed:collapser::collapsed
          [syntax+] {
-            lhs.collapsed = collapser::collapsestr($r1)
+            lhs.collapsed = collapser::stream($r1)
             if (!lhs.collapsed) reject
          }
    end
@@ -65,7 +65,7 @@ context expr
       def type
          collapsed:collapser::collapsed
          [syntax+] {
-            lhs.collapsed = collapser::collapsestr($r1)
+            lhs.collapsed = collapser::stream($r1)
             if (!lhs.collapsed) reject
          }
    end
@@ -396,19 +396,7 @@ context collapser
       [tok+] commit { flush_all() lhs.result = parse reducer::collapsed[values] if (!lhs.result) reject }
 
    collapsed
-   collapse(s:stream)
-   {
-      c:collapser = new collapser()
-      c->stack = op_stack_new()
-      c->values = ''
-      c->next_is_unary = true
-      parse r:collapsed(c)[s]
-      op_stack_free(c->stack)
-      return r
-   }
-
-   collapsed
-   collapsestr(s:str)
+   stream(s:any)
    {
       c:collapser = new collapser()
       c->stack = op_stack_new()
@@ -420,7 +408,7 @@ context collapser
    }
 end
 
-# r:collapser::collapsed = collapser::collapse(stdin)
+# r:collapser::collapsed = collapser::stream(stdin)
 # if (r) {
 #    print($r.result, '\n')
 # } else {
