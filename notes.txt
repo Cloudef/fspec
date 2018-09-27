@@ -1,2 +1,0 @@
-Fspec should not allow using array as N for array.
-Fspec should allow variable width types, s?? u??
