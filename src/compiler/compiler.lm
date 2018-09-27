@@ -4,6 +4,11 @@
 include 'expr.lm'
 
 context fspec
+   enum_counter:int
+   void enum_inc() { enum_counter = enum_counter + 1 }
+   void enum_set(v:int) { enum_counter = v }
+   int enum_get() { return enum_counter }
+
    context primitive
       token TYPE_SIGN / [us] /
       token TYPE_BITS / [1-9][0-9]* /
@@ -33,20 +38,22 @@ context fspec
             return expr.result.value.number.value
          }
 
-         def item
+         def declaration
             value:int
-            [name:reference::variable::type `= expr::enum::type `, item] { lhs.value = const_int_expr(r3.collapsed) }
-         |  [name:reference::variable::type `= expr::enum::type] { lhs.value = const_int_expr(r3.collapsed) }
-         |  [name:reference::variable::type `, item] { lhs.value = 0 } # TODO: count
-         |  [name:reference::variable::type] { lhs.value = 0 } # TODO: count
+            [name:reference::variable::type `= expr::enum::type] { lhs.value = const_int_expr(r3.collapsed) enum_set(lhs.value) enum_inc() }
+         |  [name:reference::variable::type] { lhs.value = enum_get() enum_inc() }
+
+         def item
+            [decl:declaration `, item] | [decl:declaration]
 
          def type
             name:str
             items:item+
             select:expr::paren::type
             [type:`enum WS+ reference::variable::type? `{ item+ `}] {
-               for n:reference::variable::type in child(r3)
-               lhs.name = $n lhs.items = r5
+               for n:reference::variable::type in child(r3) lhs.name = $n
+               lhs.items = r5
+               enum_set(0)
             }
       end
 
@@ -171,9 +178,17 @@ context fspec
 
    def source
       [items:declaration::type*] commit
+
+   source
+   stream(s:stream)
+   {
+      c:fspec = new fspec()
+      c->enum_counter = 0
+      return parse source(c)[s]
+   }
 end
 
-parse source:fspec::source[stdin]
+source:fspec::source = fspec::stream(stdin)
 
 if (!source) {
    print(error)
@@ -338,8 +353,8 @@ walk(d:fspec::declaration::type)
 
    if ($s.data.type == 'enum') {
       for i:fspec::container::enum::item in repeat(s.data.items) {
-         print('constant `', $i.name, '` is ', $i.value, '\n')
-         insert('variable', $i.name, i)
+         print('constant `', $i.decl.name, '` is ', $i.decl.value, '\n')
+         insert('variable', $i.decl.name, i)
       }
    } else if ($s.data.type == 'struct') {
       push_scope(endianess_from_decl(d))
