@@ -61,7 +61,7 @@ struct flac {
                u32 user_comment_list_length;
                struct utf8_string user_comment[user_comment_list_length];
                u1 framing_bit | matches(true);
-            } vorbis_comment le;
+            } vorbis_comment | endianess('le');
          CUESHEET)
             struct {
                u8 catalog[128] | encoding('ascii') str;
@@ -169,4 +169,4 @@ struct flac {
       } subframe;
       u16 crc_16 hex;
    } frame[until (false)];
-} be;
+} | endianess('be');

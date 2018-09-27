@@ -106,13 +106,9 @@ context fspec
          ignore / '//' [^\n]* '\n' | space+ /
          literal `: `[ `] `| `;
          token VISUAL / 'nul' | 'dec' | 'hex' | 'str' /
-         token ENDIANESS / 'le' | 'be' /
       end
 
       literal `enum `struct
-
-      def endianess
-         [name:ENDIANESS]
 
       def visual
          [name:VISUAL]
@@ -127,7 +123,7 @@ context fspec
       def extra
          # if set, this field has trivial length, otherwise need to read subscripts
          length:collapser::collapsed
-         [subscript:subscript* filter:filter* visual:visual? endianess:endianess?] {
+         [subscript:subscript* filter:filter* visual:visual?] {
             f:str = ''
             has_slice:bool
             for l:subscript in repeat(r1) {
@@ -172,8 +168,8 @@ context fspec
          # select ((expr)) { ... } name <extra>;
          # struct (optional) { ... } name <extra>;
       |  [container:container::type name:reference::variable::type extra:extra `;]
-         # (enum|struct) name { ... } <(le|be)>;
-      |  [container:container::type endianess:endianess? `;]
+         # (enum|struct) name { ... } <filters>;
+      |  [container:container::type filter:filter* `;]
    end
 
    def source
@@ -196,17 +192,15 @@ if (!source) {
 }
 
 struct scope
-   endianess:str
    names:map<str, map<str, any>>
 end
 
 global g_scopes:list<scope> = new list<scope>()
 
 void
-push_scope(endianess:str) {
+push_scope() {
    s:scope = new scope()
    s->names = new map<str, map<str, any>>()
-   s->endianess = endianess
    g_scopes->push_head(s)
 }
 
@@ -271,28 +265,6 @@ container_name_str(s:str) { if (!s) return '<anon>' return s }
 str
 signed_str(s:bool) { if (s) return 'signed' return 'unsigned' }
 
-str
-endianess_str(s:str)
-{
-   if (s == 'be')
-      return 'big-endian'
-   else if (s == 'le')
-      return 'little-endian'
-
-   print('something went wrong!\n')
-   exit(1)
-}
-
-str
-endianess_from_decl(d:fspec::declaration::type)
-{
-   endianess:str = g_scopes->top->endianess
-   if (d.endianess)
-      for e:fspec::declaration::endianess in child(d.endianess) endianess = $e
-   if (d.extra && d.extra.endianess)
-      for e:fspec::declaration::endianess in child(d.extra.endianess) endianess = $e
-   return endianess
-}
 
 void
 print_declaration(d:fspec::declaration::type)
@@ -334,9 +306,7 @@ print_declaration(d:fspec::declaration::type)
          print('   it needs to be filtered with `', $f.function, '`\n')
 
       for v:fspec::declaration::visual in child(d.extra.visual)
-         print('   and it should be visualized as `', $v.name, '`\n')
-
-      print('   the field is in ', endianess_str(endianess_from_decl(d)), ' byte order\n')
+         print('and it should be visualized as `', $v.name, '`\n')
    }
 }
 
@@ -357,7 +327,7 @@ walk(d:fspec::declaration::type)
          insert('variable', $i.decl.name, i)
       }
    } else if ($s.data.type == 'struct') {
-      push_scope(endianess_from_decl(d))
+      push_scope()
       for i:fspec::container::strukt::item in repeat(s.data.items) {
          if (i.data.container)
             walk(i.data)
@@ -366,25 +336,21 @@ walk(d:fspec::declaration::type)
       }
       pop_scope()
    } else if ($s.data.type == 'select') {
-      push_scope(endianess_from_decl(d))
-      print('━━━━ start of (', $s.data.select, ') ━━━━\n')
+      push_scope()
       for i:fspec::container::select::item in repeat(s.data.items) {
          if (i.expr)
-            print('━━━━ (', $i.expr, ')\n')
          else
-            print('━━━━ DEFAULT\n')
 
          if (i.data.container)
             walk(i.data)
          else
             print_declaration(i.data)
       }
-      print('━━━━ end of (', $s.data.select, ') ━━━━\n')
       pop_scope()
    }
 }
 
-push_scope('le')
+push_scope()
 for d:fspec::declaration::type in repeat(source.items)
    walk(d)
 pop_scope()

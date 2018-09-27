@@ -75,7 +75,7 @@ context reference
    lex
       # reserved
       literal `struct `enum `select
-      literal `nul `dec `hex `str `be `le
+      literal `nul `dec `hex `str
       literal `until `sizeof
       token PRIMITIVE / [us][1-9][0-9]* /
       literal `( `) `,

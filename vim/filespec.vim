@@ -11,7 +11,7 @@ syn region  fsComment         start="//" skip="\\$" end="$" keepend contains=@fs
 
 syn keyword fsKeyword   select until
 syn keyword fsStructure enum struct
-syn keyword fsConstant  nul dec hex str be le true false
+syn keyword fsConstant  nul dec hex str true false
 syn match fsPrimitive   "[su][1-9][0-9]*"
 
 syn case ignore
