@@ -265,12 +265,13 @@ container_name_str(s:str) { if (!s) return '<anon>' return s }
 str
 signed_str(s:bool) { if (s) return 'signed' return 'unsigned' }
 
+global INDSTP:str = '░  '
 
 void
-print_declaration(d:fspec::declaration::type)
+print_declaration(d:fspec::declaration::type, ind:str)
 {
    insert('variable', $d.name, d)
-   print('variable `', $d.name, '` is ')
+   print(ind, 'variable `', $d.name, "` that's ")
 
    c:fspec::container::type
    if (d.cref) c = lookup($d.cref, $d.parent) else c = d.container
@@ -290,28 +291,28 @@ print_declaration(d:fspec::declaration::type)
    if (d.extra) {
       if (d.extra.length) {
          if (!d.extra.length.result.value || d.extra.length.result.value.reference) {
-            print('   it has a variable length that needs to be computed with formula `', $d.extra.length, '`\n')
+            print(ind, INDSTP, 'it has a variable length that needs to be computed with formula `', $d.extra.length, '`\n')
          } else {
             if (d.extra.length.result.value.number) {
-               print('   it has a constant length of ', $d.extra.length.result.value, '\n')
+               print(ind, INDSTP, 'it has a constant length of ', $d.extra.length.result.value, '\n')
             } else if (d.extra.length.result.value.string) {
-               print('   its length will increase until pattern `', $d.extra.length.result.value.string.raw, '` has been read from stream\n')
+               print(ind, INDSTP, '   its length will increase until pattern `', $d.extra.length.result.value.string.raw, '` has been read from stream\n')
             }
          }
       } else {
-         print('   the subscripts contain slices, and thus needs some runtime loops to be computed\n')
+         print(ind, INDSTP, 'the subscripts contain slices, and thus needs some runtime loops to be computed\n')
       }
 
       for f:fspec::declaration::filter in repeat(d.extra.filter)
-         print('   it needs to be filtered with `', $f.function, '`\n')
+         print(ind, INDSTP, 'it needs to be filtered with `', $f.function, '`\n')
 
       for v:fspec::declaration::visual in child(d.extra.visual)
-         print('and it should be visualized as `', $v.name, '`\n')
+         print(ind, INDSTP, 'it should be visualized as `', $v.name, '`\n')
    }
 }
 
 void
-walk(d:fspec::declaration::type)
+walk(d:fspec::declaration::type, ind:str)
 {
    if (!d.container) {
       print('something went wrong!\n')
@@ -321,30 +322,50 @@ walk(d:fspec::declaration::type)
    s:fspec::container::type = d.container
    insert($s.data.type, s.data.name, s)
 
+   if (d.name) {
+      print_declaration(d, ind)
+      ind = ind + INDSTP
+      print(ind, 'and it contains\n')
+   } else {
+      print(ind, 'container `', s.data.type, ' ', container_name_str(s.data.name), '`')
+      if ($d.filter != '') {
+         print('\n')
+         ind = ind + INDSTP
+         for f:fspec::declaration::filter in repeat(d.filter)
+            print(ind, 'it needs to be filtered with `', $f.function, '`\n')
+         print(ind, 'and it contains\n')
+      } else {
+         print(' that contains\n')
+      }
+   }
+
    if ($s.data.type == 'enum') {
       for i:fspec::container::enum::item in repeat(s.data.items) {
-         print('constant `', $i.decl.name, '` is ', $i.decl.value, '\n')
+         print(ind, INDSTP, 'constant `', $i.decl.name, '` which value is ', $i.decl.value, '\n')
          insert('variable', $i.decl.name, i)
       }
    } else if ($s.data.type == 'struct') {
       push_scope()
       for i:fspec::container::strukt::item in repeat(s.data.items) {
          if (i.data.container)
-            walk(i.data)
+            walk(i.data, ind + INDSTP)
          else
-            print_declaration(i.data)
+            print_declaration(i.data, ind + INDSTP)
       }
       pop_scope()
    } else if ($s.data.type == 'select') {
+      ind = ind + INDSTP
       push_scope()
       for i:fspec::container::select::item in repeat(s.data.items) {
          if (i.expr)
+            print(ind, 'in case of (', $i.expr, ')\n')
          else
+            print(ind, 'or otherwise\n')
 
          if (i.data.container)
-            walk(i.data)
+            walk(i.data, ind + INDSTP)
          else
-            print_declaration(i.data)
+            print_declaration(i.data, ind + INDSTP)
       }
       pop_scope()
    }
@@ -352,5 +373,5 @@ walk(d:fspec::declaration::type)
 
 push_scope()
 for d:fspec::declaration::type in repeat(source.items)
-   walk(d)
+   walk(d, '')
 pop_scope()
