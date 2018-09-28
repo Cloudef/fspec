@@ -40,24 +40,49 @@ context number
 end
 
 context string
-   rl ESC / '\\' /
-
    lex
       literal `' `"
-      token ESC_CHR / ESC [abfnrtv\\'"e] /
-      token ESC_HEX / ESC 'x' xdigit{2} /
-      token ESC_OCT / ESC [0-7]{1,3} /
-      token CHAR / ^cntrl /
+      token ESC / '\\' /
+      token CHR / [abfnrtv\\'"e] /
+      token HEX / 'x' xdigit{2} /
+      token OCT / [0-7]{1,3} /
    end
 
-   def raw
-      [ESC_CHR] # TODO: how to output raw bytes?
-   |  [ESC_HEX] # TODO: how to output raw bytes?
-   |  [ESC_OCT] # TODO: how to output raw bytes?
-   |  [CHAR]
+   token CHAR_SQ / ^cntrl - ['\\] /
+   token CHAR_DQ / ^cntrl - ["\\] /
+
+   int strtoull(a:str, b:int) = c_strtoull
+   str esc2chr(a:str) = c_esc2chr
+   str num2chr(a:int) = c_num2chr
+
+   def escape
+      data:str
+      [ESC CHR] { lhs.data = esc2chr($r2) }
+   |  [ESC HEX] { lhs.data = num2chr(strtoull('0' + $r2, 16)) }
+   |  [ESC OCT] { lhs.data = num2chr(strtoull($r2, 8)) }
+
+   def double_quoted
+      data:str
+      [escape] { lhs.data = r1.data } | [CHAR_DQ] { lhs.data = $r1 }
+
+   def single_quoted
+      data:str
+      [escape] { lhs.data = r1.data } | [CHAR_SQ] { lhs.data = $r1 }
 
    def type
+      raw:str
       length:int
-      [`' raw:raw* `'] { i:int = 0 for s:raw in r2 i = i + 1 lhs.length = i }
-   |  [`" raw:raw* `"] { i:int = 0 for s:raw in r2 i = i + 1 lhs.length = i }
+      escaped:str
+      [`' single_quoted* `'] {
+         lhs.raw = ''
+         lhs.escaped = $r2
+         for i:single_quoted in repeat(r2) lhs.raw = lhs.raw + i.data
+         lhs.length = lhs.raw.data.length
+      }
+   |  [`" double_quoted* `"] {
+         lhs.raw = ''
+         lhs.escaped = $r2
+         for i:double_quoted in repeat(r2) lhs.raw = lhs.raw + i.data
+         lhs.length = lhs.raw.data.length
+      }
 end

@@ -296,7 +296,7 @@ print_declaration(d:fspec::declaration::type, ind:str)
             if (d.extra.length.result.value.number) {
                print(ind, INDSTP, 'it has a constant length of ', $d.extra.length.result.value, '\n')
             } else if (d.extra.length.result.value.string) {
-               print(ind, INDSTP, '   its length will increase until pattern `', $d.extra.length.result.value.string.raw, '` has been read from stream\n')
+               print(ind, INDSTP, '   its length will increase until pattern `', d.extra.length.result.value.string.escaped, '` has been read from stream\n')
             }
          }
       } else {
