@@ -31,8 +31,32 @@ upref(program_t *prg, tree_t *tree)
    return tree;
 }
 
+union opstr {
+   struct {
+      unsigned offset:7;
+      unsigned size:1; // +1
+   };
+   uint8_t u8;
+};
+
+static const char *opstr_lookup = "[]().+#+-#-!=~*/%<<>>=<==^&&||?:";
+
+static inline union opstr
+opstr_from_str(str_t *a)
+{
+   assert(a && a->value->length && (value_t)a->value->length <= 2);
+   for (const char *l = opstr_lookup; *l; ++l) {
+      if (memcmp(l, a->value->data, a->value->length))
+         continue;
+      return (union opstr){ .offset = l - opstr_lookup, .size = a->value->length - 1 };
+   }
+   errx(EXIT_FAILURE, "%s: couldn't lookup operator `%*s`", __func__, a->value->length, a->value->data);
+   return (union opstr){ .u8 = 0 };
+}
+
 struct op_stack {
-   uint16_t data[1024], index;
+   uint8_t data[1024];
+   uint16_t index;
 };
 
 value_t
@@ -53,31 +77,28 @@ str_t*
 c_op_stack_top(program_t *prg, tree_t **sp, value_t a)
 {
    struct op_stack *stack = ptr_from_value(a);
-   union { uint16_t v; char op[2]; } convert;
-   assert(sizeof(convert) == sizeof(convert.v));
-
    if (!stack->index)
       return NULL;
 
-   convert.v = stack->data[stack->index - 1];
-   tree_t *s = construct_string(prg, string_alloc_full(prg, convert.op, 1 + (convert.op[1] != 0)));
+   const union opstr op = { .u8 = stack->data[stack->index - 1] };
+   tree_t *s = construct_string(prg, colm_string_alloc_pointer(prg, opstr_lookup + op.offset, 1 + op.size));
    return (str_t*)upref(prg, s);
 }
 
 value_t
 c_op_stack_push(program_t *prg, tree_t **sp, value_t a, str_t *b)
 {
-   union { uint16_t v; char op[2]; } convert = {0};
-   assert(sizeof(convert) == sizeof(convert.v));
-   assert((value_t)b->value->length <= sizeof(convert.op));
-   memcpy(convert.op, b->value->data, b->value->length);
+   assert(b);
+   const union opstr op = opstr_from_str(b);
    colm_tree_downref(prg, sp, (tree_t*)b);
 
    struct op_stack *stack = ptr_from_value(a);
-   if (stack->index >= sizeof(stack->data) / sizeof(stack->data[0]))
+   if (stack->index >= ARRAY_SIZE(stack->data)) {
+      warnx("%s: ran out of stack space", __func__);
       return 0;
+   }
 
-   stack->data[stack->index++] = convert.v;
+   stack->data[stack->index++] = op.u8;
    return 1;
 }
 
