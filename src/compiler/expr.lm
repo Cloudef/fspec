@@ -116,7 +116,7 @@ context collapser
    next_is_unary:bool
 
    literal `+ `-
-   literal `( `) `+# `-# `! `~ `* `/ `% `#+ `#- `<< `>> `< `> `<= `>= `== `!= `& `^ `| `&& `|| `? `:
+   literal `( `) `+# `-# `! `~ `* `/ `% `#+ `#- `<< `>> `< `> `<= `>= `== `!= `&& `& `^ `|| `| `? `:
    literal `. `[ `]
    literal `sizeof
 
@@ -124,7 +124,7 @@ context collapser
       [`!] | [`~]
 
    def binary_unambi
-      [`.] | [`*] | [`/] | [`%] | [`<<] | [`>>] | [`<] | [`>] | [`<=] | [`>=] | [`==] | [`!=] | [`&] | [`^] | [`|] | [`&&] | [`||]
+      [`.] | [`*] | [`/] | [`%] | [`<<] | [`>>] | [`<] | [`>] | [`<=] | [`>=] | [`==] | [`!=] | [`^] | [`&&] | [`&] | [`||] | [`|]
 
    def ternary
       [`:]
@@ -178,11 +178,11 @@ context collapser
       |  [number::type WS number::type WS `>=] { r:int = 0 if (r1.value >= r3.value) r = 1 lhs.value = parse value[$r] }
       |  [number::type WS number::type WS `==] { r:int = 0 if (r1.value == r3.value) r = 1 lhs.value = parse value[$r] }
       |  [number::type WS number::type WS `!=] { r:int = 0 if (r1.value != r3.value) r = 1 lhs.value = parse value[$r] }
+      |  [number::type WS number::type WS `&&] { r:int = 0 if (r1.value && r3.value) r = 1 lhs.value = parse value[$r] }
       |  [number::type WS number::type WS `&] { lhs.value = parse value[$bitand(r1.value, r3.value)] }
       |  [number::type WS number::type WS `^] { lhs.value = parse value[$bitxor(r1.value, r3.value)] }
-      |  [number::type WS number::type WS `|] { lhs.value = parse value[$bitor(r1.value, r3.value)] }
-      |  [number::type WS number::type WS `&&] { r:int = 0 if (r1.value && r3.value) r = 1 lhs.value = parse value[$r] }
       |  [number::type WS number::type WS `||] { r:int = 0 if (r1.value || r3.value) r = 1 lhs.value = parse value[$r] }
+      |  [number::type WS number::type WS `|] { lhs.value = parse value[$bitor(r1.value, r3.value)] }
       |  [number::type WS number::type WS number::type WS `:] { if (r1.value) lhs.value = parse value[$r3] else lhs.value = parse value[$r5] }
       |  [number::type WS value WS `]] commit { reject }
 
@@ -380,7 +380,7 @@ context collapser
       [number::unsigned::type] | [string::type]
 
    def tok#en
-      [value WS+ value] commit { reject }
+      [value WS* value] commit { reject }
    |  [binary WS* binary] commit { reject }
    |  [constant WS* `(] commit { reject }
    |  [`) WS* value] commit { reject }
