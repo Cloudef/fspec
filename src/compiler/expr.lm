@@ -167,6 +167,7 @@ context collapser
       |  [number::type WS `~] { lhs.value = parse value[$bitnot(r1.value)] }
       |  [number::type WS number::type WS `*] { lhs.value = parse value[$(r1.value * r3.value)] }
       |  [number::type WS number::type WS `/] { lhs.value = parse value[$(r1.value / r3.value)] }
+      |  [number::type WS number::type WS `%] { lhs.value = parse value[$modulo(r1.value, r3.value)] }
       |  [number::type WS number::type WS `#+] { lhs.value = parse value[$(r1.value + r3.value)] }
       |  [number::type WS number::type WS `#-] { lhs.value = parse value[$(r1.value - r3.value)] }
       |  [number::type WS number::type WS `<<] { lhs.value = parse value[$shiftl(r1.value, r3.value)] }
