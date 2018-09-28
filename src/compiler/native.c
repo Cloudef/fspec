@@ -12,18 +12,21 @@
 static inline void*
 ptr_from_value(value_t ptr)
 {
+   assert(ptr);
    return (void*)(intptr_t)ptr;
 }
 
 static inline value_t
 value_from_ptr(void *ptr)
 {
+   assert(ptr);
    return (value_t)(intptr_t*)ptr;
 }
 
 static inline tree_t*
 upref(program_t *prg, tree_t *tree)
 {
+   assert(prg && tree);
    colm_tree_upref(prg, tree);
    return tree;
 }
@@ -90,9 +93,13 @@ c_op_stack_pop(program_t *prg, tree_t **sp, value_t a)
 value_t
 c_strtoull(program_t *prg, tree_t **sp, str_t *a, value_t b)
 {
+   assert(a);
+
    char buf[24] = {0};
-   if ((value_t)a->value->length >= sizeof(buf))
-	  return -1;
+   if ((value_t)a->value->length >= sizeof(buf)) {
+      warnx("%s: input string is too large", __func__);
+      return -1;
+   }
 
    memcpy(buf, a->value->data, a->value->length);
    colm_tree_downref(prg, sp, (tree_t*)a);
