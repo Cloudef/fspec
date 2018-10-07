@@ -54,7 +54,7 @@ struct elf {
       } u32 p_type;
 
       select (e_ident.ei_class) {
-         header.CLASS_32)
+         e_ident.CLASS_32)
             struct {
                u32 p_offset hex;
                u32 p_vaddr hex;
@@ -64,7 +64,7 @@ struct elf {
                u32 p_flags hex;
                u32 p_align;
             } elf32;
-         header.CLASS_64)
+         e_ident.CLASS_64)
             struct {
                u32 p_flags hex;
                u64 p_offset hex;
@@ -95,33 +95,33 @@ struct elf {
          SHF_EXCLUDE = 0x80000000
       };
 
+      u32 sh_name hex;
+
+      enum sh_type {
+         SHT_NULL,
+         SHT_PROGBITS,
+         SHT_SYMTAB,
+         SHT_STRTAB,
+         SHT_RELA,
+         SHT_HASH,
+         SHT_DYNAMIC,
+         SHT_NOTE,
+         SHT_NOBITS,
+         SHT_REL,
+         SHT_SHLIB,
+         SHT_DYNSYM,
+         SHT_INIT_ARRAY,
+         SHT_FINI_ARRAY,
+         SHT_PREINIT_ARRAY,
+         SHT_GROUP,
+         SHT_SYMTAB_INDEX,
+         SHT_NUM,
+         SHT_LOOS = 0x60000000
+      } u32 sh_type;
+
       select (e_ident.ei_class) {
-         header.CLASS_32)
+         e_ident.CLASS_32)
             struct {
-               u32 sh_name hex;
-
-               enum sh_type {
-                  SHT_NULL,
-                  SHT_PROGBITS,
-                  SHT_SYMTAB,
-                  SHT_STRTAB,
-                  SHT_RELA,
-                  SHT_HASH,
-                  SHT_DYNAMIC,
-                  SHT_NOTE,
-                  SHT_NOBITS,
-                  SHT_REL,
-                  SHT_SHLIB,
-                  SHT_DYNSYM,
-                  SHT_INIT_ARRAY,
-                  SHT_FINI_ARRAY,
-                  SHT_PREINIT_ARRAY,
-                  SHT_GROUP,
-                  SHT_SYMTAB_INDEX,
-                  SHT_NUM,
-                  SHT_LOOS = 0x60000000
-               } u32 sh_type;
-
                enum sh_flags u32 sh_flags;
                u32 sh_addr hex;
                u32 sh_offset hex;
@@ -131,12 +131,14 @@ struct elf {
                u32 sh_addralign;
                u32 sh_entsize;
             } elf32;
-         header.CLASS_64)
+         e_ident.CLASS_64)
             struct {
                enum sh_flags u64 sh_flags;
                u64 sh_addr hex;
                u64 sh_offset hex;
                u64 sh_size;
+               u32 sh_link;
+               u32 sh_info;
                u64 sh_addralign;
                u64 sh_entsize;
             } elf64;
@@ -154,7 +156,7 @@ struct elf {
          ET_HIOS = 0xfeff,
          ET_LOPROC = 0xff00,
          ET_HIPROC = 0xffff
-      } u16 e_type hex;
+      } u16 e_type;
 
       enum {
          MACHINE_NONE,
@@ -169,18 +171,18 @@ struct elf {
          MACHINE_X86_64 = 0x3E,
          MACHINE_AARCH64 = 0xB7,
          MACHINE_RISCV = 0xF3
-      } u16 e_machine hex;
+      } u16 e_machine;
 
       u32 e_version;
 
       select (e_ident.ei_class) {
-         header.CLASS_32)
+         e_ident.CLASS_32)
             struct {
                u32 e_entry hex;
                u32 e_phoff;
                u32 e_shoff;
             } elf32;
-         header.CLASS_64)
+         e_ident.CLASS_64)
             struct {
                u64 e_entry hex;
                u64 e_phoff;
@@ -201,7 +203,7 @@ struct elf {
       struct section_header e_sh[e_shnum:e_shentsize];
    };
 
-   select (e_ident.ei_class) {
+   select (e_ident.ei_data) {
       e_ident.ENDIANESS_LE) struct body le | endianess('le');
       e_ident.ENDIANESS_BE) struct body be | endianess('be');
    } body;
