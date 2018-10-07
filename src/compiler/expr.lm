@@ -11,26 +11,51 @@ global RTYPE_STRING:int = 2
 
 context expr
    context enum
-      token EXPR / (any - [,}]) /
+      lex
+         ignore / space+ /
+         literal `, `{ `}
+         token EXPR / any /
+      end
 
       def type
          collapsed:collapser::collapsed
-         [EXPR+] {
+         [EXPR+] commit {
+            lhs.collapsed = collapser::stream($r1)
+            if (!lhs.collapsed) reject
+         }
+   end
+
+   context select
+      lex
+         ignore / space+ /
+         literal `( `) `{ `}
+         token EXPR / any /
+      end
+
+      def syntax
+         [EXPR] | [`( syntax+ `)]
+
+      def type
+         collapsed:collapser::collapsed
+         [syntax+] {
             lhs.collapsed = collapser::stream($r1)
             if (!lhs.collapsed) reject
          }
    end
 
    context paren
-      literal `( `)
-      token EXPR / any /
+      lex
+         ignore / space+ /
+         literal `( `) `{ `}
+         token EXPR / any /
+      end
 
       def syntax
-         [EXPR] | [`( syntax `)]
+         [EXPR] | [`( syntax+ `)]
 
       def type
          collapsed:collapser::collapsed
-         [syntax+] {
+         [syntax+] commit {
             lhs.collapsed = collapser::stream($r1)
             if (!lhs.collapsed) reject
          }
@@ -38,16 +63,17 @@ context expr
 
    context bracket
       lex
-         literal `[ `] `? `:
+         ignore / space+ /
+         literal `[ `] `? `: `{ `}
          token EXPR / any /
       end
 
       def syntax
-         [EXPR] | [`[ syntax `]] | [syntax `? syntax `: syntax]
+         [EXPR] | [`[ syntax+ `]] | [syntax+ `? syntax+ `: syntax+]
 
       def type
          collapsed:collapser::collapsed
-         [syntax+] {
+         [syntax+] commit {
             lhs.collapsed = collapser::stream($r1)
             if (!lhs.collapsed) reject
          }
@@ -55,16 +81,17 @@ context expr
 
    context arg
       lex
-         literal `( `) `,
+         ignore / space+ /
+         literal `( `) `, `{ `}
          token EXPR / any /
       end
 
       def syntax
-         [EXPR] | [`( syntax `)]
+         [EXPR] | [`( syntax+ `)]
 
       def type
          collapsed:collapser::collapsed
-         [syntax+] {
+         [syntax+] commit {
             lhs.collapsed = collapser::stream($r1)
             if (!lhs.collapsed) reject
          }
@@ -84,13 +111,13 @@ context reference
 
    context function
       def arg
-         [expr::arg::type `, arg] | [expr::arg::type]
+         [expr::arg::type WS* `, WS* arg] | [expr::arg::type]
 
       def name
          [`until] | [`sizeof] | [NAME]
 
       def type
-         [name:name WS* `( args:arg* `)]
+         [name:name WS* `( WS* args:arg* WS* `)]
    end
 
    context variable
@@ -99,7 +126,7 @@ context reference
    end
 
    def type
-      [function::type] | [variable::type]
+      [function:function::type] | [variable:variable::type]
 end
 
 context collapser
@@ -199,7 +226,7 @@ context collapser
       |  [value WS number::type WS string::type WS ternary] commit { reject } # (v ? num : str)
       |  [value WS string::type WS number::type WS ternary] commit { reject } # (v ? str : num)
       |  [string::type WS value WS value WS ternary] commit { reject } # (str ? v : v)
-      |  [string::type WS number::type WS `]] {
+      |  [string::type WS number::type WS `]] commit {
          if (r1.length <= r3.value) {
             print('subscript out of bounds\n')
             reject
@@ -210,20 +237,25 @@ context collapser
 
       def valueop
          rtype:int
-         [value WS value WS `]] { lhs.rtype = RTYPE_NUMBER }
-      |  [value WS unary] { lhs.rtype = RTYPE_NUMBER }
-      |  [value WS value WS binary] { lhs.rtype = RTYPE_NUMBER }
-      |  [value WS value WS value WS ternary] { if (r3.rtype != r5.rtype) reject lhs.rtype = r1.rtype }
+         value:value
+         [value WS `+#] { lhs.value = parse value[$r1] }
+      |  [value WS value WS `>] { lhs = parse valueop[$r2 ' ' $r1 ' <'] }
+      |  [value WS value WS `>=] { lhs = parse valueop[$r2 ' ' $r1 ' <='] }
+      |  [value WS value WS op:`]] { lhs.rtype = RTYPE_NUMBER }
+      |  [value WS op:unary] { lhs.rtype = RTYPE_NUMBER }
+      |  [value WS value WS op:binary] { lhs.rtype = RTYPE_NUMBER }
+      |  [value WS value WS value WS op:ternary] commit { if (r3.rtype != r5.rtype) reject lhs.rtype = r1.rtype }
+      |  [valueop WS op:anynary] { lhs.rtype = r1.rtype }
+      |  [valueop WS value] { lhs.rtype = r1.rtype }
 
       def operation
          rtype:int
           [numop] { lhs = parse operation[$r1.value] }
        |  [stringop] { lhs = parse operation[$r1.value] }
-       |  [valueop] { lhs.rtype = r1.rtype }
+       |  [value WS] { lhs = parse operation[$r1] }
+       |  [operation WS] { lhs = parse operation[$r1] }
+       |  [valueop] { if (r1.value) lhs = parse operation[$r1.value] else lhs.rtype = r1.rtype }
        |  [value] { lhs.rtype = r1.rtype }
-       |  [value WS] { lhs.rtype = r1.rtype }
-       |  [operation WS] { lhs.rtype = r1.rtype }
-       |  [operation anynary] { lhs.rtype = r1.rtype }
 
       def collapsed
          value:value
