@@ -40,7 +40,7 @@ context fspec
 
          def declaration
             value:int
-            [name:reference::variable::type `= expr::enum::type] { lhs.value = const_int_expr(r3.collapsed) enum_set(lhs.value) enum_inc() }
+            [name:reference::variable::type `= expr::enum::type] commit { lhs.value = const_int_expr(r3.collapsed) enum_set(lhs.value) enum_inc() }
          |  [name:reference::variable::type] { lhs.value = enum_get() enum_inc() }
 
          def item
@@ -81,14 +81,13 @@ context fspec
       context select
          lex
             ignore / '//' [^\n]* '\n' | space+ /
-            literal `( `) `{ `} `*
+            literal `( `) `{ `} `* `:
          end
 
          literal `select
 
          def item
-            [`* `) data:declaration::type]
-         |  [expr:expr::paren::type `) data:declaration::type]
+            [expr:expr::select::type `) data:declaration::type]
 
          def type
             name:str
@@ -105,7 +104,7 @@ context fspec
       lex
          ignore / '//' [^\n]* '\n' | space+ /
          literal `: `[ `] `| `;
-         token VISUAL / 'nul' | 'dec' | 'hex' | 'str' /
+         token VISUAL / 'nul' | 'dec' | 'hex' | 'str' | 'flt' /
       end
 
       literal `enum `struct
@@ -116,39 +115,12 @@ context fspec
       def filter
          [`| function:reference::function::type]
 
-      def subscript
+      def dimension
          [`[ expr:expr::bracket::type `: slice:expr::bracket::type `]]
       |  [`[ expr:expr::bracket::type `]]
 
       def extra
-         # if set, this field has trivial length, otherwise need to read subscripts
-         length:collapser::collapsed
-         [subscript:subscript* filter:filter* visual:visual?] {
-            f:str = ''
-            has_slice:bool
-            for l:subscript in repeat(r1) {
-               if (l.slice) {
-                  f = ''
-                  has_slice = true
-                  break
-               }
-
-               if (f != '')
-                  f = f + '*'
-
-               if (l.expr.collapsed.result.value) {
-                  f = f + '(' + $l.expr.collapsed.result.value + ')'
-               } else {
-                  f = f + '(' + $l.expr.collapsed + ')'
-               }
-            }
-
-            if (f == '' && !has_slice)
-               f = '1'
-
-            if (f != '')
-               lhs.length = collapser::stream(f)
-         }
+         [dimension:dimension* filter:filter* visual:visual?]
 
       def type
          # enum name <primitive> name <extra>;
@@ -170,6 +142,8 @@ context fspec
       |  [container:container::type name:reference::variable::type extra:extra `;]
          # (enum|struct) name { ... } <filters>;
       |  [container:container::type filter:filter* `;]
+         # name(...);
+      |  [function:reference::function::type `;]
    end
 
    def source
@@ -211,14 +185,18 @@ pop_scope()
 }
 
 any
+lookup_in_scope_no_error(type:str, name:str, s:scope)
+{
+   cmap:map<str, any> = s->names->find(type)
+   if (cmap) return cmap->find(name)
+   return nil
+}
+
+any
 lookup_no_error(type:str, name:str) {
    for s:scope in g_scopes {
-      cmap:map<str, any> = s->names->find(type)
-      if (cmap) {
-         var:any = cmap->find(name)
-         if (var)
-            return var
-      }
+      v:any = lookup_in_scope_no_error(type, name, s)
+      if (v) return v
    }
    return nil
 }
@@ -249,9 +227,10 @@ insert(type:str, name:str, var:any)
 }
 
 any
-lookup(type:str, name:str)
+lookup(type:str, name:str, s:scope)
 {
-   r:any = lookup_no_error(type, name)
+   r:any = nil
+   if (s) r = lookup_in_scope_no_error(type, name, s) else r = lookup_no_error(type, name)
    if (!r) {
       print('`', type, ' ', name, '` is not declared in this or outer scope!\n')
       exit(1)
@@ -259,119 +238,324 @@ lookup(type:str, name:str)
    return r
 }
 
-str
-container_name_str(s:str) { if (!s) return '<anon>' return s }
+global g_cscope:map<any, scope> = new map<any, scope>()
+global g_regs:map<any, int> = new map<any, int>()
+global g_offs:map<any, int> = new map<any, int>()
+global g_ops:map<str, int> = new map<str, int>()
+global g_visuals:map<str, int> = new map<str, int>()
+global g_types:map<str, int> = new map<str, int>()
 
-str
-signed_str(s:bool) { if (s) return 'signed' return 'unsigned' }
+g_ops->insert('-#', 0)
+g_ops->insert('!', 1)
+g_ops->insert('~', 2)
+g_ops->insert('*', 3)
+g_ops->insert('/', 4)
+g_ops->insert('%', 5)
+g_ops->insert('#+', 6)
+g_ops->insert('#-', 7)
+g_ops->insert('<<', 8)
+g_ops->insert('>>', 9)
+g_ops->insert('<', 10)
+g_ops->insert('<=', 11)
+g_ops->insert('==', 12)
+g_ops->insert('!=', 13)
+g_ops->insert('&', 14)
+g_ops->insert('|', 15)
+g_ops->insert('^', 16)
+g_ops->insert('&&', 17)
+g_ops->insert('||', 18)
+g_ops->insert(':', 19)
+g_ops->insert(']', 20)
 
-global INDSTP:str = '░  '
+g_visuals->insert('nul', 0)
+g_visuals->insert('dec', 1)
+g_visuals->insert('hex', 2)
+g_visuals->insert('str', 3)
+g_visuals->insert('flt', 4)
+
+g_types->insert('enum', 0)
+g_types->insert('struct', 1)
+g_types->insert('select', 2) # UNION
+
+global INS_VERSION:int = 0
+global INS_REG:int = 1
+global INS_PUSH:int = 2
+global INS_PUSHR:int = 3
+global INS_STORE:int = 4
+global INS_OP:int = 5
+global INS_QUEUE:int = 6
+global INS_IO:int = 7
+global INS_EXEC:int = 8
+global INS_CALL:int = 9
+global INS_JMP:int = 10
+global INS_JMPIF:int = 11
+
+int insbuf_written() = c_insbuf_written
+str flush_insbuf() = c_flush_insbuf
+void write_ins(ins:int, num:int) = c_write_ins
+void write_ins_with_data(ins:int, data:str) = c_write_ins_with_data
+
+global g_regc:int = 1
 
 void
-print_declaration(d:fspec::declaration::type, ind:str)
+new_reg(v:any, data:str)
 {
-   insert('variable', $d.name, d)
-   print(ind, 'variable `', $d.name, "` that's ")
-
-   c:fspec::container::type
-   if (d.cref) c = lookup($d.cref, $d.parent) else c = d.container
-
-   if (c) {
-      print('`', c.data.type, ' ', container_name_str(c.data.name), '` ')
-
-      if (c.data.select)
-         print('with expression `', $c.data.select, '` ')
+   if (g_regs->find(v)) {
+      print('Register for `', $v, '` already exists!\n')
+      exit(1)
    }
 
-   if (d.primitive)
-      print(d.primitive.bits, ' bits and ', signed_str(d.primitive.signed))
+   if (!data) data = ''
+   write_ins_with_data(INS_REG, data)
+   print(flush_insbuf())
+   g_regs->insert(v, g_regc)
+   g_regc = g_regc + 1
+}
 
-   print('\n')
+void
+write_data_if_not_there(v:str)
+{
+   if (!g_regs->find(v))
+      new_reg(v, v)
+}
 
-   if (d.extra) {
-      if (d.extra.length) {
-         if (!d.extra.length.result.value || d.extra.length.result.value.reference) {
-            print(ind, INDSTP, 'it has a variable length that needs to be computed with formula `', $d.extra.length, '`\n')
-         } else {
-            if (d.extra.length.result.value.number) {
-               print(ind, INDSTP, 'it has a constant length of ', $d.extra.length.result.value, '\n')
-            } else if (d.extra.length.result.value.string) {
-               print(ind, INDSTP, '   its length will increase until pattern `', d.extra.length.result.value.string.escaped, '` has been read from stream\n')
+void
+find_data_in(s:any)
+{
+   for v:string::type in s
+      write_data_if_not_there(v.raw)
+   for v:reference::function::type in s
+      write_data_if_not_there($v.name)
+}
+
+write_ins(INS_VERSION, 1)
+for e:expr::paren::type in source
+   find_data_in(e.collapsed)
+for e:expr::bracket::type in source
+   find_data_in(e.collapsed)
+for e:expr::arg::type in source
+   find_data_in(e.collapsed)
+for f:reference::function::type in source
+   write_data_if_not_there($f.name)
+for d:fspec::declaration::type in source {
+   if (d.name)
+      write_data_if_not_there($d.name)
+   if (d.container && d.container.data.name)
+      write_data_if_not_there($d.container.data.name)
+}
+
+global g_fcr:int = g_regc
+write_ins_with_data(INS_REG, '')
+g_regc = g_regc + 1
+
+void
+write_expr(expr:collapser::reducer::collapsed)
+{
+   for o:collapser::reducer::operation in repeat(expr) {
+      for v:collapser::reducer::value in child(o) {
+         if (v.number) {
+            write_ins(INS_PUSH, v.number.value)
+         } else if (v.string) {
+            write_ins(INS_PUSHR, g_regs->find(v.string.raw))
+         } else if (v.reference) {
+            if (v.reference.variable) {
+               write_ins(INS_PUSHR, g_regs->find(lookup('variable', $v.reference.variable.name, nil)))
+            } else if (v.reference.function) {
+               if ($v.reference.function.name != 'until') {
+                  for a:expr::arg::type in v.reference.function
+                     write_expr(a.collapsed.result)
+                  write_ins(INS_CALL, g_regs->find($v.reference.function.name))
+               }
             }
          }
-      } else {
-         print(ind, INDSTP, 'the subscripts contain slices, and thus needs some runtime loops to be computed\n')
       }
-
-      for f:fspec::declaration::filter in repeat(d.extra.filter)
-         print(ind, INDSTP, 'it needs to be filtered with `', $f.function, '`\n')
-
-      for v:fspec::declaration::visual in child(d.extra.visual)
-         print(ind, INDSTP, 'it should be visualized as `', $v.name, '`\n')
+      for vop:collapser::reducer::valueop in child(o) {
+         if ($vop.op == '.') {
+            s:scope = nil
+            d:fspec::declaration::type = nil
+            off:int = 0
+            for r:reference::variable::type in vop {
+               d = lookup('variable', $r.name, s)
+               if (d.container) {
+                  s = g_cscope->find(%d.container)
+                  off = g_offs->find(%d.container)
+               }
+            }
+            write_ins(INS_PUSHR, off + g_regs->find(%d))
+         } else {
+            write_ins(INS_OP, g_ops->find($vop.op))
+         }
+      }
    }
 }
 
 void
-walk(d:fspec::declaration::type, ind:str)
+write_postexpr(expr:collapser::reducer::collapsed, start:int)
+{
+   for o:collapser::reducer::operation in repeat(expr) {
+      for v:collapser::reducer::value in child(o) {
+         if (v.reference && v.reference.function) {
+            if ($v.reference.function.name == 'until') {
+               for a:expr::arg::type in v.reference.function
+                  write_expr(a.collapsed.result)
+               write_ins(INS_OP, g_ops->find('!'))
+               write_ins(INS_JMPIF, start)
+            }
+         }
+      }
+   }
+}
+
+void
+write_declaration(d:fspec::declaration::type, index:int)
+{
+   if (!d.name) {
+      print('something went wrong!\n')
+      exit(1)
+   }
+
+   c:fspec::container::type = d.container
+   if (d.cref) c = lookup($d.cref, $d.parent, nil)
+
+   locs:map<any, int> = new map<any, int>()
+   if (d.extra) {
+      for l:fspec::declaration::dimension in repeat(d.extra.dimension) {
+         locs->insert(%l, insbuf_written())
+         write_expr(l.expr.collapsed.result)
+      }
+
+      #for f:fspec::declaration::filter in repeat(d.extra.filter) {
+      #   for a:expr::arg::type in f
+      #      write_expr(a.collapsed.result)
+      #   write_ins(INS_CALL, g_regs->find($f.function.name))
+      #}
+   }
+
+   if (!c) {
+      write_ins(INS_PUSHR, g_fcr)
+      write_ins(INS_PUSH, index)
+      write_ins(INS_OP, g_ops->find('#+'))
+      write_ins(INS_IO, d.primitive.bits)
+   } else {
+      write_ins(INS_PUSH, g_offs->find(%c))
+      write_ins(INS_STORE, g_fcr)
+      write_ins(INS_EXEC, g_regs->find(%c))
+   }
+
+   if (d.extra) {
+      for l:fspec::declaration::dimension in repeat(d.extra.dimension)
+         write_postexpr(l.expr.collapsed.result, locs->find(%l))
+   }
+}
+
+void
+walk1(d:fspec::declaration::type)
 {
    if (!d.container) {
       print('something went wrong!\n')
       exit(1)
    }
 
-   s:fspec::container::type = d.container
-   insert($s.data.type, s.data.name, s)
+   for i:fspec::container::strukt::item in repeat(d.container.data.items)
+      if (i.data.container)
+         walk1(i.data)
 
-   if (d.name) {
-      print_declaration(d, ind)
-      ind = ind + INDSTP
-      print(ind, 'and it contains\n')
-   } else {
-      print(ind, 'container `', s.data.type, ' ', container_name_str(s.data.name), '`')
-      if ($d.filter != '') {
-         print('\n')
-         ind = ind + INDSTP
-         for f:fspec::declaration::filter in repeat(d.filter)
-            print(ind, 'it needs to be filtered with `', $f.function, '`\n')
-         print(ind, 'and it contains\n')
-      } else {
-         print(' that contains\n')
-      }
+   for i:fspec::container::select::item in repeat(d.container.data.items)
+      if (i.data.container)
+         walk1(i.data)
+
+   g_offs->insert(%d.container, g_regc)
+
+   for i:fspec::container::enum::item in repeat(d.container.data.items) {
+      # somehow need to get this constant time (not reg)
    }
 
-   if ($s.data.type == 'enum') {
-      for i:fspec::container::enum::item in repeat(s.data.items) {
-         print(ind, INDSTP, 'constant `', $i.decl.name, '` which value is ', $i.decl.value, '\n')
-         insert('variable', $i.decl.name, i)
-      }
-   } else if ($s.data.type == 'struct') {
-      push_scope()
-      for i:fspec::container::strukt::item in repeat(s.data.items) {
-         if (i.data.container)
-            walk(i.data, ind + INDSTP)
-         else
-            print_declaration(i.data, ind + INDSTP)
-      }
-      pop_scope()
-   } else if ($s.data.type == 'select') {
-      ind = ind + INDSTP
-      push_scope()
-      for i:fspec::container::select::item in repeat(s.data.items) {
-         if (i.expr)
-            print(ind, 'in case of (', $i.expr, ')\n')
-         else
-            print(ind, 'or otherwise\n')
+   for i:fspec::container::strukt::item in repeat(d.container.data.items) {
+      if (i.data.primitive)
+         new_reg(%i.data, nil)
+   }
 
-         if (i.data.container)
-            walk(i.data, ind + INDSTP)
-         else
-            print_declaration(i.data, ind + INDSTP)
-      }
-      pop_scope()
+   for i:fspec::container::select::item in repeat(d.container.data.items) {
+      if (i.data.primitive)
+         new_reg(%i.data, nil)
    }
 }
 
+void
+walk2(d:fspec::declaration::type)
+{
+   if (!d.container) {
+      print('something went wrong!\n')
+      exit(1)
+   }
+
+   insert($d.container.data.type, d.container.data.name, %d.container)
+
+   if ($d.container.data.type != 'enum')
+      push_scope()
+
+   for i:fspec::container::enum::item in repeat(d.container.data.items)
+      insert('variable', $i.decl.name, %i.decl)
+
+   for i:fspec::container::strukt::item in repeat(d.container.data.items) {
+      if (i.data.container)
+         walk2(i.data)
+      if (i.data.name)
+         insert('variable', $i.data.name, %i.data)
+   }
+
+   for i:fspec::container::select::item in repeat(d.container.data.items) {
+      if (i.data.container)
+         walk2(i.data)
+      if (i.data.name)
+         insert('variable', $i.data.name, %i.data)
+   }
+
+   if (!d.name) {
+      write_ins(INS_PUSH, g_offs->find(%d.container))
+      write_ins(INS_STORE, g_fcr)
+   }
+
+   index:int = 0
+   for i:fspec::container::strukt::item in repeat(d.container.data.items)
+      if (i.data.name) {
+         write_declaration(i.data, index)
+         index = index + 1
+      } else if (i.data.function) {
+         for a:expr::arg::type in i.data.function
+            write_expr(a.collapsed.result)
+         write_ins(INS_CALL, g_regs->find($i.data.function.name))
+      }
+
+   for i:fspec::container::select::item in repeat(d.container.data.items) {
+      if (i.data.name) {
+         if (i.expr) {
+            write_expr(d.container.data.select.collapsed.result)
+            write_expr(i.expr.collapsed.result)
+            write_ins(INS_OP, g_ops->find('=='))
+         }
+         write_declaration(i.data, index)
+         index = index + 1
+      }
+   }
+
+   if (insbuf_written()) {
+      new_reg(%d.container, flush_insbuf())
+      print(flush_insbuf())
+   }
+
+   g_cscope->insert(%d, g_scopes->top)
+
+   if ($d.container.data.type != 'enum')
+      pop_scope()
+}
+
+for d:fspec::declaration::type in repeat(source.items)
+   walk1(d)
+
 push_scope()
 for d:fspec::declaration::type in repeat(source.items)
-   walk(d, '')
+   walk2(d)
 pop_scope()
+
+print(flush_insbuf())

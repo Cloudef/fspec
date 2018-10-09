@@ -1,11 +1,94 @@
-struct ability {
-   u16 index;
-   u16 icon_id;
-   u16 mp_cost;
-   u16 unknown;
-   u16 targets;
-   u8 name[32] | encoding('sjis') str; // The encoding actually depends on ROM region
-   u8 description[256] | encoding('sjis') str; // ^ Ditto, we can't express this (we need parser options)
-   u8 padding[726] nul;
-   struct ability ability[until (false)];
+struct dat {
+   struct asd {
+      u16 index;
+      u16 icon_id;
+      u16 mp_cost;
+      u16 unknown;
+      u16 targets;
+      u8 name[32] | encoding('sjis') str; // The encoding actually depends on ROM region
+      u8 description[256] | encoding('sjis') str; // ^ Ditto, we can't express this (we need parser options)
+      u8 padding[726] nul;
+   } ability[until (false)];
 };
+
+// # Instructions
+//
+// Instructions are variable-length with minimum size of 16 bits and maximum size of 128 bits[1].
+// They are encoded with the following schema `5:name 2:n (16 * 2^n - 7):modifiers`, where `name` specifies the
+// instruction name and `n` specifies the total width of the instruction in bits with the formula `16 * 2^n`.
+//
+// Here's a table that shows how `n` maps to the instruction size:
+// n | instruction size in bits
+// 0 | 16
+// 1 | 32
+// 2 | 64
+// 3 | 128
+//
+// In the list below the notation for instruction and its modifiers is `NAME<1:arg1, 1:arg2> [STACK1] (STACK2)`
+// where `NAME` is the name of instruction, and inside the `<>` brackets are the modifiers for the instruction.
+// The optional number before the modifier tells the modifier size in bits, if omitted rest of the bits are used.
+// Inside `[]` brackets are the arguments that will be popped from the stack. `()` parenthesis are used instead,
+// if the stack argument is optional.
+//
+// List of instructions:
+// Name             | Hex  | Description
+// VERSION<version> | 0x00 | Indicates the version of this bytecode.
+// REG<len>         | 0x01 | Allocates a new register.
+//                  *      * If `len` is not zero, the next `len` bytes will be stored in this register.
+// PUSH<v>          | 0x02 | Pushes `v` to the stack.
+// PUSHR<R>         | 0x03 | Pushes the contents of register at index `R` to the stack.
+// STORE<R> [v]     | 0x04 | Stores `v` into register at index `R`.
+// OP<op> [...]     | 0x05 | Performs operation specified by the `op`, and pushes the result to the stack.
+// QUEUE<len> (...) | 0x06 | Queues next `len` bytes for execution for the next `IO` instruction.
+//                  *      * The code is executed before or after `IO` instruction, depending whether VM is packing or unpacking.
+// IO<sz> [R] (...) | 0x07 | Unpacking: Reads data from external VM input (usually a file) to register at index `R`.
+//                  *      * Packing: Writes data to external VM output (usually a file) from register at index `R`.
+//                  *      * `sz` is the size of the element in bits.
+//                  *      * Rest of the stack is the number of elements, if empty, the elements to read/write is 1.
+// EXEC<R> (...)    | 0x08 | Executes instructions stored in register at index `R`.
+//                  *      * Rest of the stack is the number of times to execute, if empty, execution happens only once.
+// CALL<R> (...)    | 0x09 | Calls a function. The name of the function is stored in register at index `R`.
+// JMP<off>         | 0x0A | Jumps to the `off` (in bytes).
+// JMPIF<off> [v]   | 0x0B | Performs `JMP`, if `v` is true.
+// STRUCT<R> [R2]   | 0x0C | Describes register at index `R` as struct structure. Register at index `R2` contains the name of the struct.
+// SELECT<R>        | 0x0D | Describes register at index `R` as select structure.
+// FIELD<R> (...)   | 0x0E | Links field to last structure. Register at index `R` contains the name of the field.
+//                  *      * Rest of the stack contains register indices for registers that are instances of this field.
+// BSZ<s:1, v> [sz] | 0x0F | Describes last field as a primitive field. `s` describes whether the field is signed. `v` describes how the
+//                  *      * field should be represented. `sz` contains the size of field in bits.
+// REF<R>           | 0x10 | Describes field as a substructure. Register at index `R` contains the structure definition.
+// FDIMENSION<sz>   | 0x11 | Adds fixed dimension to a field. `sz` indicates the size of the dimension.
+// VDIMENSION       | 0x12 | Adds variable length dimension to a field.
+// ENUM<R>          | 0x13 | Links field to a enum
+//
+// List of operations for the `OP` instruction:
+// Name      | Hex  | Argc | Description
+// UNM       | 0x00 | 1    | Unary minus operation `-r1`.
+// LNOT      | 0x01 | 1    | Logical not operation `!r1`.
+// BNOT      | 0x02 | 1    | Bitwise not operation `~r1`.
+// MUL       | 0x03 | 2    | Multiplication operation `r1 * r2`.
+// DIV       | 0x04 | 2    | Division operation `r1 * r2`.
+// MOD       | 0x05 | 2    | Modulo operation `r1 % r2`.
+// ADD       | 0x06 | 2    | Addition operation `r1 + r2`.
+// SUB       | 0x07 | 2    | Substraction operation `r1 - r2`.
+// SHIFTL    | 0x08 | 2    | Left shift operation `r1 << r2`.
+// SHIFTR    | 0x09 | 2    | Right shift operation `r1 >> r2`.
+// LESS      | 0x0A | 2    | Less than operation `r1 < r2`.
+// LESSEQ    | 0x0B | 2    | Less or equal operation `r1 <= r2`.
+// EQ        | 0x0C | 2    | Equal operation `r1 == r2`.
+// NOTEQ     | 0x0D | 2    | Not equal operation `r1 != r2`.
+// BAND      | 0x0E | 2    | Bitwise and operation `r1 & r2`.
+// BOR       | 0x0F | 2    | Bitwise or operation `r1 | r2`.
+// BXOR      | 0x10 | 2    | Bitwise xor operation `r1 ^ r2`.
+// LAND      | 0x11 | 2    | Logical and operation `r1 && r2`.
+// LOR       | 0x12 | 2    | Logical or operation `r1 || r2`.
+// CTERNARY  | 0x13 | 3    | Conditional ternary operation `r1 ? r2 : r3`
+// SUBSCRIPT | 0x14 | 2    | Subscript operation `r1[r2]`
+//
+// List of visuals for the `PIO` instruction:
+// Name | Hex  | Representation
+// NUL  | 0x00 | None
+// DEC  | 0x01 | Decimal
+// HEX  | 0x02 | Hexdecimal
+// STR  | 0x03 | String
+// FLT  | 0x04 | Float

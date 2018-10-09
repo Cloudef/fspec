@@ -37,9 +37,9 @@ context expr
 
       def type
          collapsed:collapser::collapsed
-         [syntax+] {
+         [syntax+] commit {
             lhs.collapsed = collapser::stream($r1)
-            if (!lhs.collapsed) reject
+            if (!lhs.collapsed && $r1 != '*') reject
          }
    end
 

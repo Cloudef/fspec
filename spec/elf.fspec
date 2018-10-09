@@ -198,9 +198,23 @@ struct elf {
       u16 e_shnum;
       u16 e_shstrndx;
 
-      // TODO: need to handle offsets
-      struct program_header e_ph[e_phnum:e_phentsize];
-      struct section_header e_sh[e_shnum:e_shentsize];
+      // TODO: would be nicer if we didn't need this select
+      select (e_ident.ei_class) {
+         e_ident.CLASS_32)
+            struct {
+               seek(arch.elf32.e_phoff);
+               struct program_header e_ph[e_phnum:e_phentsize];
+               seek(arch.elf32.e_shoff);
+               struct section_header e_sh[e_shnum:e_shentsize];
+            } elf32;
+         e_ident.CLASS_64)
+            struct {
+               seek(arch.elf64.e_phoff);
+               struct program_header e_ph[e_phnum:e_phentsize];
+               seek(arch.elf64.e_shoff);
+               struct section_header e_sh[e_shnum:e_shentsize];
+            } elf64;
+      } headers;
    };
 
    select (e_ident.ei_data) {

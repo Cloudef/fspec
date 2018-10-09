@@ -81,8 +81,7 @@ c_op_stack_top(program_t *prg, tree_t **sp, value_t a)
       return NULL;
 
    const union opstr op = { .u8 = stack->data[stack->index - 1] };
-   tree_t *s = construct_string(prg, colm_string_alloc_pointer(prg, opstr_lookup + op.offset, 1 + op.size));
-   return (str_t*)upref(prg, s);
+   return (str_t*)upref(prg, construct_string(prg, colm_string_alloc_pointer(prg, opstr_lookup + op.offset, 1 + op.size)));
 }
 
 value_t
@@ -111,6 +110,77 @@ c_op_stack_pop(program_t *prg, tree_t **sp, value_t a)
    return r;
 }
 
+static uint8_t
+bits_for_n(const uint8_t n, const uint8_t used)
+{
+   return 16 * (1 << n) - used;
+}
+
+static uint8_t
+n_for_v(const uint64_t v, const uint8_t used)
+{
+   const uint8_t bits = __builtin_ctzl((v ? v : 1));
+   if (used <= 16 && bits < bits_for_n(0, used))
+      return 0;
+   else if (used <= 32 && bits < bits_for_n(1, used))
+      return 1;
+   else if (used <= 64 && bits < bits_for_n(2, used))
+      return 2;
+
+   errx(EXIT_FAILURE, "numbers over 57 bits not supported right now.. sorry :D");
+   return 3;
+}
+
+static void
+vle_instruction(const uint8_t name, const uint64_t v, uint8_t out[16], uint8_t *out_written)
+{
+   assert(out && out_written);
+   const union {
+      struct { unsigned name:5; unsigned n:2; uint64_t v:57; } ins;
+      uint8_t v[16];
+   } u = { .ins = { .name = name, .n = n_for_v(v, 7), .v = v } };
+   *out_written = sizeof(uint16_t) * (1 << u.ins.n);
+   memcpy(out, u.v, *out_written);
+}
+
+struct insbuf {
+   uint8_t data[sizeof(uint16_t) * 1024];
+   size_t written;
+} insbuf = {0};
+
+str_t*
+c_flush_insbuf(program_t *prg, tree_t **sp)
+{
+   tree_t *s = upref(prg, construct_string(prg, string_alloc_full(prg, insbuf.data, insbuf.written)));
+   insbuf.written = 0;
+   return (str_t*)s;
+}
+
+int
+c_insbuf_written(program_t *prg, tree_t **sp)
+{
+   return insbuf.written;
+}
+
+void
+c_write_ins(program_t *prg, tree_t **sp, value_t a, value_t b)
+{
+   uint8_t out[16], written;
+   vle_instruction(a, b, out, &written);
+   memcpy(&insbuf.data[insbuf.written], out, written);
+   insbuf.written += written;
+}
+
+void
+c_write_ins_with_data(program_t *prg, tree_t **sp, value_t a, str_t *b)
+{
+   assert(b);
+   c_write_ins(prg, sp, a, b->value->length);
+   memcpy(&insbuf.data[insbuf.written], b->value->data, b->value->length);
+   insbuf.written += b->value->length;
+   colm_tree_downref(prg, sp, (tree_t*)b);
+}
+
 value_t
 c_strtoull(program_t *prg, tree_t **sp, str_t *a, value_t b)
 {
@@ -131,6 +201,8 @@ str_t*
 c_esc2chr(program_t *prg, tree_t **sp, str_t *a)
 {
    assert(a);
+   const char hay = *a->value->data;
+   colm_tree_downref(prg, sp, (tree_t*)a);
 
    static const struct { const char e, v; } map[] = {
       { .e = 'a', .v = '\a' },
@@ -147,14 +219,14 @@ c_esc2chr(program_t *prg, tree_t **sp, str_t *a)
    };
 
    for (size_t i = 0; i < ARRAY_SIZE(map); ++i) {
-      if (*a->value->data != map[i].e)
+      if (hay != map[i].e)
          continue;
 
       tree_t *s = construct_string(prg, colm_string_alloc_pointer(prg, &map[i].v, 1));
       return (str_t*)upref(prg, s);
    }
 
-   errx(EXIT_FAILURE, "%s: unknown escape character `%c`", __func__, *a->value->data);
+   errx(EXIT_FAILURE, "%s: unknown escape character `%c`", __func__, hay);
    return NULL;
 }
 

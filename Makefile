@@ -8,11 +8,11 @@ WARNINGS := -Wall -Wextra -Wpedantic -Wformat=2 -Wstrict-aliasing=3 -Wstrict-ove
 	-Wfloat-equal -Wcast-align -Wpointer-arith -Wchar-subscripts -Warray-bounds=2
 
 override CFLAGS ?= -g
-override CFLAGS += -std=c11 $(WARNINGS)
+override CFLAGS += -std=c11 -D_DEFAULT_SOURCE $(WARNINGS)
 override CPPFLAGS += -Isrc
 override COLMFLAGS += -Isrc/compiler
 
-bins = fspec-info dec2bin xidec xi2path xils xifile uneaf
+bins = fspec-info fspec-dump dec2bin xidec xi2path xils xifile uneaf
 all: $(bins)
 
 %.c: %.lm
@@ -35,6 +35,7 @@ fspec-compiler.a: src/compiler/compiler.c fspec-compiler-native.a
 
 fspec-info: private LDLIBS += -lcolm
 fspec-info: src/bin/fspec-info.c fspec-compiler.a fspec-compiler-native.a
+fspec-dump: src/bin/fspec-dump.c
 
 dec2bin: src/bin/misc/dec2bin.c
 
