@@ -433,8 +433,10 @@ write_declaration(d:fspec::declaration::type, index:int)
 
    if (!c) {
       write_ins(INS_PUSHR, g_fcr)
-      write_ins(INS_PUSH, index)
-      write_ins(INS_OP, g_ops->find('#+'))
+      if (index != 0) {
+         write_ins(INS_PUSH, index)
+         write_ins(INS_OP, g_ops->find('#+'))
+      }
       write_ins(INS_IO, d.primitive.bits)
    } else {
       write_ins(INS_PUSH, g_offs->find(%c))
