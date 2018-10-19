@@ -1,5 +1,6 @@
 #include <colm/tree.h>
 #include <colm/bytecode.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
@@ -111,35 +112,26 @@ c_op_stack_pop(program_t *prg, tree_t **sp, value_t a)
 }
 
 static uint8_t
-bits_for_n(const uint8_t n, const uint8_t used)
-{
-   return 16 * (1 << n) - used;
-}
-
-static uint8_t
 n_for_v(const uint64_t v, const uint8_t used)
 {
-   const uint8_t bits = __builtin_ctzl((v ? v : 1));
-   if (used <= 16 && bits < bits_for_n(0, used))
-      return 0;
-   else if (used <= 32 && bits < bits_for_n(1, used))
-      return 1;
-   else if (used <= 64 && bits < bits_for_n(2, used))
-      return 2;
-
-   errx(EXIT_FAILURE, "numbers over 57 bits not supported right now.. sorry :D");
+   for (uint8_t n = 0; n < 4; ++n) {
+      const uint8_t bits = CHAR_BIT * (1 << n);
+      if (used < bits && v < (uint64_t)(1 << (bits - used)))
+         return n;
+   }
+   errx(EXIT_FAILURE, "number `%" PRIu64 "` is too big to be compiled in instruction", v);
    return 3;
 }
 
 static void
-vle_instruction(const uint8_t name, const uint64_t v, uint8_t out[16], uint8_t *out_written)
+vle_instruction(const uint8_t name, const uint64_t v, uint8_t out[8], uint8_t *out_written)
 {
    assert(out && out_written);
    const union {
       struct { unsigned name:5; unsigned n:2; uint64_t v:57; } ins;
-      uint8_t v[16];
+      uint8_t v[sizeof(uint64_t)];
    } u = { .ins = { .name = name, .n = n_for_v(v, 7), .v = v } };
-   *out_written = sizeof(uint16_t) * (1 << u.ins.n);
+   *out_written = sizeof(u.v[0]) * (1 << u.ins.n);
    memcpy(out, u.v, *out_written);
 }
 
@@ -165,7 +157,7 @@ c_insbuf_written(program_t *prg, tree_t **sp)
 void
 c_write_ins(program_t *prg, tree_t **sp, value_t a, value_t b)
 {
-   uint8_t out[16], written;
+   uint8_t out[8], written;
    vle_instruction(a, b, out, &written);
    memcpy(&insbuf.data[insbuf.written], out, written);
    insbuf.written += written;

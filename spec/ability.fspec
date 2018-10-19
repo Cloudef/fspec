@@ -30,60 +30,66 @@ struct dat {
 // Inside `[]` brackets are the arguments that will be popped from the stack. `()` parenthesis are used instead,
 // if the stack argument is optional.
 //
+// Reserved registers:
+// r0: Always empty, used as NULL / empty data indicator
+// r1: Field counter
+//
 // List of instructions:
-// Name             | Hex  | Description
-// VERSION<version> | 0x00 | Indicates the version of this bytecode.
-// REG<len>         | 0x01 | Allocates a new register.
-//                  *      * If `len` is not zero, the next `len` bytes will be stored in this register.
-// PUSH<v>          | 0x02 | Pushes `v` to the stack.
-// PUSHR<R>         | 0x03 | Pushes the contents of register at index `R` to the stack.
-// STORE<R> [v]     | 0x04 | Stores `v` into register at index `R`.
-// OP<op> [...]     | 0x05 | Performs operation specified by the `op`, and pushes the result to the stack.
-// QUEUE<len> (...) | 0x06 | Queues next `len` bytes for execution for the next `IO` instruction.
-//                  *      * The code is executed before or after `IO` instruction, depending whether VM is packing or unpacking.
-// IO<sz> [R] (...) | 0x07 | Unpacking: Reads data from external VM input (usually a file) to register at index `R`.
-//                  *      * Packing: Writes data to external VM output (usually a file) from register at index `R`.
-//                  *      * `sz` is the size of the element in bits.
-//                  *      * Rest of the stack is the number of elements, if empty, the elements to read/write is 1.
-// EXEC<R> (...)    | 0x08 | Executes instructions stored in register at index `R`.
-//                  *      * Rest of the stack is the number of times to execute, if empty, execution happens only once.
-// CALL<R> (...)    | 0x09 | Calls a function. The name of the function is stored in register at index `R`.
-// JMP<off>         | 0x0A | Jumps to the `off` (in bytes).
-// JMPIF<off> [v]   | 0x0B | Performs `JMP`, if `v` is true.
-// STRUCT<R> [R2]   | 0x0C | Describes register at index `R` as struct structure. Register at index `R2` contains the name of the struct.
-// SELECT<R>        | 0x0D | Describes register at index `R` as select structure.
-// FIELD<R> (...)   | 0x0E | Links field to last structure. Register at index `R` contains the name of the field.
-//                  *      * Rest of the stack contains register indices for registers that are instances of this field.
-// BSZ<s:1, v> [sz] | 0x0F | Describes last field as a primitive field. `s` describes whether the field is signed. `v` describes how the
-//                  *      * field should be represented. `sz` contains the size of field in bits.
-// REF<R>           | 0x10 | Describes field as a substructure. Register at index `R` contains the structure definition.
-// FDIMENSION<sz>   | 0x11 | Adds fixed dimension to a field. `sz` indicates the size of the dimension.
-// VDIMENSION       | 0x12 | Adds variable length dimension to a field.
-// ENUM<R>          | 0x13 | Links field to a enum
+// Name                 | Hex  | Description
+// VERSION<version>     | 0x00 | Indicates the version of this bytecode.
+// REG<len>             | 0x01 | Allocates a new register.
+//                      *      * If `len` is not zero, the next `len` bytes will be stored in this register.
+// PUSH<v>              | 0x02 | Pushes `v` to the stack.
+// PUSHR<r?>            | 0x03 | Pushes the contents of register `r?` to the stack.
+// POP<r?> [v]          | 0x04 | Pops `v` into register `r?`.
+// INCR<r?>             | 0x05 | Increments the register `r?` by one.
+// OP<op> [...]         | 0x06 | Performs operation specified by the `op`, and pushes the result to the stack.
+// QUEUE<len> (...)     | 0x07 | Queues next `len` bytes for execution for the next `IO` instruction.
+//                      *      * The code is executed before or after `IO` instruction, depending whether VM is packing or unpacking.
+// IO<sz> (...)         | 0x08 | Unpacking: Reads data from external VM input (usually a file) to register pointed by `r1`.
+//                      *      * Packing: Writes data to external VM output (usually a file) from register pointed by `r1`.
+//                      *      * `sz` is the size of the element in bits.
+//                      *      * Rest of the stack is the number of elements, if empty, the elements to read/write is 1.
+// EXEC<r?> [r??] (...) | 0x09 | Sets `r1` to `r??` and executes instructions stored in register `r?`.
+//                      *      * Rest of the stack is the number of times to execute, if empty, execution happens only once.
+//                      *      * `r1` will be saved and restored during this instruction.
+// CALL<r?> (...)       | 0x0A | Calls a function. The name of the function is stored in register `r?`.
+// JMP<off>             | 0x0B | Jumps to the `off` (in bytes).
+// JMPIF<off> [v]       | 0x0C | Performs `JMP`, if `v` is true.
+// STRUCT<r?> [r??]     | 0x0D | Describes register `r?` as struct structure. register `r??` contains the name of the struct.
+// SELECT<r?>           | 0x0E | Describes register `r?` as select structure.
+// FIELD<r?> (...)      | 0x0F | Links field to last structure. register `r?` contains the name of the field.
+//                      *      * Rest of the stack contains register indices for registers that are instances of this field.
+// BSZ<s:1, v> [sz]     | 0x10 | Describes last field as a primitive field. `s` describes whether the field is signed. `v` describes how the
+//                      *      * field should be represented. `sz` contains the size of field in bits.
+// REF<r?>              | 0x11 | Describes field as a substructure. register `r?` contains the structure definition.
+// FDIMENSION<sz>       | 0x12 | Adds fixed dimension to a field. `sz` indicates the size of the dimension.
+// VDIMENSION           | 0x13 | Adds variable length dimension to a field.
+// ENUM<r?>             | 0x14 | Links field to a enum
 //
 // List of operations for the `OP` instruction:
 // Name      | Hex  | Argc | Description
-// UNM       | 0x00 | 1    | Unary minus operation `-r1`.
-// LNOT      | 0x01 | 1    | Logical not operation `!r1`.
-// BNOT      | 0x02 | 1    | Bitwise not operation `~r1`.
-// MUL       | 0x03 | 2    | Multiplication operation `r1 * r2`.
-// DIV       | 0x04 | 2    | Division operation `r1 * r2`.
-// MOD       | 0x05 | 2    | Modulo operation `r1 % r2`.
-// ADD       | 0x06 | 2    | Addition operation `r1 + r2`.
-// SUB       | 0x07 | 2    | Substraction operation `r1 - r2`.
-// SHIFTL    | 0x08 | 2    | Left shift operation `r1 << r2`.
-// SHIFTR    | 0x09 | 2    | Right shift operation `r1 >> r2`.
-// LESS      | 0x0A | 2    | Less than operation `r1 < r2`.
-// LESSEQ    | 0x0B | 2    | Less or equal operation `r1 <= r2`.
-// EQ        | 0x0C | 2    | Equal operation `r1 == r2`.
-// NOTEQ     | 0x0D | 2    | Not equal operation `r1 != r2`.
-// BAND      | 0x0E | 2    | Bitwise and operation `r1 & r2`.
-// BOR       | 0x0F | 2    | Bitwise or operation `r1 | r2`.
-// BXOR      | 0x10 | 2    | Bitwise xor operation `r1 ^ r2`.
-// LAND      | 0x11 | 2    | Logical and operation `r1 && r2`.
-// LOR       | 0x12 | 2    | Logical or operation `r1 || r2`.
-// CTERNARY  | 0x13 | 3    | Conditional ternary operation `r1 ? r2 : r3`
-// SUBSCRIPT | 0x14 | 2    | Subscript operation `r1[r2]`
+// UNM       | 0x00 | 1    | Unary minus operation `-v1`.
+// LNOT      | 0x01 | 1    | Logical not operation `!v1`.
+// BNOT      | 0x02 | 1    | Bitwise not operation `~v1`.
+// MUL       | 0x03 | 2    | Multiplication operation `v1 * v2`.
+// DIV       | 0x04 | 2    | Division operation `v1 * v2`.
+// MOD       | 0x05 | 2    | Modulo operation `v1 % v2`.
+// ADD       | 0x06 | 2    | Addition operation `v1 + v2`.
+// SUB       | 0x07 | 2    | Substraction operation `v1 - v2`.
+// SHIFTL    | 0x08 | 2    | Left shift operation `v1 << v2`.
+// SHIFTR    | 0x09 | 2    | Right shift operation `v1 >> v2`.
+// LESS      | 0x0A | 2    | Less than operation `v1 < v2`.
+// LESSEQ    | 0x0B | 2    | Less or equal operation `v1 <= v2`.
+// EQ        | 0x0C | 2    | Equal operation `v1 == v2`.
+// NOTEQ     | 0x0D | 2    | Not equal operation `v1 != v2`.
+// BAND      | 0x0E | 2    | Bitwise and operation `v1 & v2`.
+// BOR       | 0x0F | 2    | Bitwise or operation `v1 | v2`.
+// BXOR      | 0x10 | 2    | Bitwise xor operation `v1 ^ v2`.
+// LAND      | 0x11 | 2    | Logical and operation `v1 && v2`.
+// LOR       | 0x12 | 2    | Logical or operation `v1 || v2`.
+// CTERNARY  | 0x13 | 3    | Conditional ternary operation `v1 ? v2 : v3`
+// SUBSCRIPT | 0x14 | 2    | Subscript operation `v1[v2]`
 //
 // List of visuals for the `PIO` instruction:
 // Name | Hex  | Representation

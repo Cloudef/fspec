@@ -167,6 +167,7 @@ if (!source) {
 
 struct scope
    names:map<str, map<str, any>>
+   roff:int
 end
 
 global g_scopes:list<scope> = new list<scope>()
@@ -281,21 +282,23 @@ global INS_VERSION:int = 0
 global INS_REG:int = 1
 global INS_PUSH:int = 2
 global INS_PUSHR:int = 3
-global INS_STORE:int = 4
-global INS_OP:int = 5
-global INS_QUEUE:int = 6
-global INS_IO:int = 7
-global INS_EXEC:int = 8
-global INS_CALL:int = 9
-global INS_JMP:int = 10
-global INS_JMPIF:int = 11
+global INS_POP:int = 4
+global INS_INCR:int = 5
+global INS_OP:int = 6
+global INS_QUEUE:int = 7
+global INS_IO:int = 8
+global INS_EXEC:int = 9
+global INS_CALL:int = 10
+global INS_JMP:int = 11
+global INS_JMPIF:int = 12
 
 int insbuf_written() = c_insbuf_written
 str flush_insbuf() = c_flush_insbuf
 void write_ins(ins:int, num:int) = c_write_ins
 void write_ins_with_data(ins:int, data:str) = c_write_ins_with_data
 
-global g_regc:int = 1
+global g_r1:int = 1
+global g_regc:int = g_r1 + 1
 
 void
 new_reg(v:any, data:str)
@@ -329,6 +332,8 @@ find_data_in(s:any)
 }
 
 write_ins(INS_VERSION, 1)
+write_ins_with_data(INS_REG, '')
+
 for e:expr::paren::type in source
    find_data_in(e.collapsed)
 for e:expr::bracket::type in source
@@ -343,10 +348,6 @@ for d:fspec::declaration::type in source {
    if (d.container && d.container.data.name)
       write_data_if_not_there($d.container.data.name)
 }
-
-global g_fcr:int = g_regc
-write_ins_with_data(INS_REG, '')
-g_regc = g_regc + 1
 
 void
 write_expr(expr:collapser::reducer::collapsed)
@@ -381,7 +382,7 @@ write_expr(expr:collapser::reducer::collapsed)
                   off = g_offs->find(%d.container)
                }
             }
-            write_ins(INS_PUSHR, off + g_regs->find(%d))
+            write_ins(INS_PUSHR, off + g_regs->find(%d) - off)
          } else {
             write_ins(INS_OP, g_ops->find($vop.op))
          }
@@ -417,6 +418,9 @@ write_declaration(d:fspec::declaration::type, index:int)
    c:fspec::container::type = d.container
    if (d.cref) c = lookup($d.cref, $d.parent, nil)
 
+   if (!c && index > 0)
+      write_ins(INS_INCR, g_r1)
+
    locs:map<any, int> = new map<any, int>()
    if (d.extra) {
       for l:fspec::declaration::dimension in repeat(d.extra.dimension) {
@@ -432,15 +436,9 @@ write_declaration(d:fspec::declaration::type, index:int)
    }
 
    if (!c) {
-      write_ins(INS_PUSHR, g_fcr)
-      if (index != 0) {
-         write_ins(INS_PUSH, index)
-         write_ins(INS_OP, g_ops->find('#+'))
-      }
       write_ins(INS_IO, d.primitive.bits)
    } else {
       write_ins(INS_PUSH, g_offs->find(%c))
-      write_ins(INS_STORE, g_fcr)
       write_ins(INS_EXEC, g_regs->find(%c))
    }
 
@@ -453,20 +451,19 @@ write_declaration(d:fspec::declaration::type, index:int)
 void
 walk1(d:fspec::declaration::type)
 {
-   if (!d.container) {
-      print('something went wrong!\n')
-      exit(1)
-   }
+   c:fspec::container::type = d.container
+   if (d.cref) c = lookup($d.cref, $d.parent, nil)
+
+   if (!c || !d.name)
+      return 0
 
    for i:fspec::container::strukt::item in repeat(d.container.data.items)
-      if (i.data.container)
-         walk1(i.data)
+      walk1(i.data)
 
    for i:fspec::container::select::item in repeat(d.container.data.items)
-      if (i.data.container)
-         walk1(i.data)
+      walk1(i.data)
 
-   g_offs->insert(%d.container, g_regc)
+   g_offs->insert(%d, g_regc)
 
    for i:fspec::container::enum::item in repeat(d.container.data.items) {
       # somehow need to get this constant time (not reg)
@@ -515,7 +512,7 @@ walk2(d:fspec::declaration::type)
 
    if (!d.name) {
       write_ins(INS_PUSH, g_offs->find(%d.container))
-      write_ins(INS_STORE, g_fcr)
+      write_ins(INS_POP, g_r1)
    }
 
    index:int = 0

@@ -1,3 +1,4 @@
+#include <inttypes.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -162,7 +163,8 @@ enum fspec_instruction {
    INS_REG,
    INS_PUSH,
    INS_PUSHR,
-   INS_STORE,
+   INS_POP,
+   INS_INCR,
    INS_OP,
    INS_QUEUE,
    INS_IO,
@@ -229,14 +231,40 @@ struct fspec_ctx {
    struct fspec_istream ir, binary;
 };
 
+static uint8_t
+bytes_for_v(const uint64_t v)
+{
+   for (uint8_t n = 0; n < 4; ++n) {
+      const uint8_t bytes = (1 << n);
+      if (v < (uint64_t)(1 << (CHAR_BIT * bytes)))
+         return bytes;
+   }
+   errx(EXIT_FAILURE, "number `%" PRIu64 "` is too big", v);
+   return 0;
+}
+
+static void
+register_set_num(struct fspec_register *r, struct fspec_buffer *buf, const uint64_t v)
+{
+   const uint8_t bsz = bytes_for_v(v);
+   *r = (struct fspec_register){ .off = buf->ptr, .len = bsz };
+   const union { uint8_t u8[sizeof(v)]; uint64_t v; } u = { .v = v };
+   fspec_buffer_write(buf, u.u8, bsz);
+}
+
+static uint64_t
+register_get_num(const struct fspec_register *r, const struct fspec_buffer *buf)
+{
+   union { uint8_t u8[sizeof(uint64_t)]; uint64_t v; } u = {0};
+   memcpy(u.u8, buf->data + r->off, MIN(r->len, sizeof(u.u8)));
+   return (u.v << r->shift[0]) >> r->shift[1];
+}
+
 static void
 stack_push_num(struct fspec_stack *stack, struct fspec_buffer *buf, const uint64_t v)
 {
    assert(stack->numv < ARRAY_SIZE(stack->value));
-   const uint8_t bsz = DIV_ROUND_UP(__builtin_ctzl((v ? v : 1)), CHAR_BIT);
-   stack->value[stack->numv++] = (struct fspec_register){ .off = buf->ptr, .len = bsz };
-   const union { uint8_t u8[sizeof(v)]; uint64_t v; } u = { .v = v };
-   fspec_buffer_write(buf, u.u8, bsz);
+   register_set_num(&stack->value[stack->numv++], buf, v);
 }
 
 static void
@@ -257,10 +285,7 @@ static uint64_t
 stack_pop_num(struct fspec_stack *stack, const struct fspec_buffer *buf)
 {
    assert(stack->numv > 0);
-   const struct fspec_register v = stack->value[--stack->numv];
-   union { uint8_t u8[sizeof(uint64_t)]; uint64_t v; } u = {0};
-   memcpy(u.u8, buf->data + v.off, MIN(v.len, sizeof(u.u8)));
-   return (u.v << v.shift[0]) >> v.shift[1];
+   return register_get_num(&stack->value[--stack->numv], buf);
 }
 
 static bool
@@ -356,11 +381,11 @@ fspec_execute(struct fspec_ctx *ctx, const uint8_t *ir, const uint64_t irlen, co
    for (const uint8_t *pc = ir; pc < ir + irlen;) {
       union {
          struct { unsigned name:5; unsigned n:2; uint64_t v:57; } ins;
-         uint8_t v[16];
+         uint8_t v[sizeof(uint64_t)];
       } u = {0};
 
-      memcpy(u.v, pc, sizeof(u.v[0]));
-      const uint8_t insw = sizeof(uint16_t) * (1 << u.ins.n);
+      memcpy(u.v, pc, 1);
+      const uint8_t insw = 1 << u.ins.n;
       memcpy(u.v, pc, insw);
       pc += insw;
 
@@ -386,9 +411,13 @@ fspec_execute(struct fspec_ctx *ctx, const uint8_t *ir, const uint64_t irlen, co
             fprintf(stderr, "PUSHR R: %lu\n", insv);
             stack_push(&ctx->S, &ctx->R.value[insv]);
             break;
-         case INS_STORE:
-            fprintf(stderr, "STORE R: %lu\n", insv);
+         case INS_POP:
+            fprintf(stderr, "POP R: %lu\n", insv);
             stack_pop(&ctx->S, &ctx->R.value[insv]);
+            break;
+         case INS_INCR:
+            fprintf(stderr, "INCR R: %lu\n", insv);
+            register_set_num(&ctx->R.value[insv], &ctx->mem, register_get_num(&ctx->R.value[insv], &ctx->mem) + 1);
             break;
          case INS_OP:
             fprintf(stderr, "OP op: %lu\n", insv);
@@ -408,20 +437,24 @@ fspec_execute(struct fspec_ctx *ctx, const uint8_t *ir, const uint64_t irlen, co
                   assert(ctx->mem.ptr + szb * nmemb <= ctx->mem.size);
                   ctx->mem.ptr += ctx->binary.read(ctx, ctx->mem.data + ctx->mem.ptr, szb * nmemb);
                } while (ctx->S.numv);
+               ctx->R.value[R].len = ctx->mem.ptr - ctx->R.value[R].off;
                if (ctx->mem.ptr == ctx->R.value[R].off)
                   return true;
-               ctx->R.value[R].len = ctx->mem.ptr - ctx->R.value[R].off;
             }
             break;
          case INS_EXEC: {
                fprintf(stderr, "EXEC R: %lu\n", insv);
+               const struct fspec_register old_r1 = ctx->R.value[1];
+               stack_pop(&ctx->S, &ctx->R.value[1]);
                uint64_t nmemb = 1;
                do {
                   nmemb *= (ctx->S.numv ? stack_pop_num(&ctx->S, &ctx->mem) : 1);
+                  fprintf(stderr, "off: %lu len: %lu nmemb: %lu\n", ctx->R.value[insv].off, ctx->R.value[insv].len, nmemb);
                   for (uint64_t i = 0; i < nmemb; ++i)
                      if (fspec_execute(ctx, ctx->mem.data + ctx->R.value[insv].off, ctx->R.value[insv].len, ind + INDSTP))
                         return true;
                } while (ctx->S.numv);
+               ctx->R.value[1] = old_r1;
             }
             break;
          case INS_CALL: {
@@ -494,7 +527,7 @@ fspec_execute(struct fspec_ctx *ctx, const uint8_t *ir, const uint64_t irlen, co
             pc = (r1 ? ir + insv : pc);
             break;
          default:
-            errx(EXIT_FAILURE, "unknown instruction: %u\n", u.ins.name);
+            errx(EXIT_FAILURE, "unknown instruction: %u :: %u\n", u.ins.name, insw);
       }
    }
    return false;
