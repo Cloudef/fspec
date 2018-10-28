@@ -30,16 +30,16 @@ $(bins): %:
 src/compiler/compiler.c: src/compiler/expr.lm src/compiler/types.lm
 fspec-compiler-native.a: private CFLAGS = -Wno-unusued-parameter
 fspec-compiler-native.a: src/compiler/native.c
-fspec-compiler.a: private CFLAGS = -std=c11
+fspec-compiler.a: private override CFLAGS = -std=c11
 fspec-compiler.a: src/compiler/compiler.c fspec-compiler-native.a
 
-fspec-info: private LDLIBS += -lcolm
+fspec-info: private override LDLIBS += -lcolm
 fspec-info: src/bin/fspec-info.c fspec-compiler.a fspec-compiler-native.a
 fspec-dump: src/bin/fspec-dump.c
 
 dec2bin: src/bin/misc/dec2bin.c
 
-xidec: private CFLAGS += -Wno-strict-overflow
+xidec: private override CFLAGS += -Wno-strict-overflow
 xidec: src/bin/xi/xidec.c
 xi2path: src/bin/xi/xi2path.c
 xils: src/bin/xi/xils.c
