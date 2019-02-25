@@ -7,8 +7,9 @@ MAKEFLAGS += --no-builtin-rules
 WARNINGS = -Wall -Wextra -Wpedantic -Wformat=2 -Wstrict-aliasing=3 -Wstrict-overflow=5 -Wstack-usage=12500 \
 	-Wfloat-equal -Wcast-align -Wpointer-arith -Wchar-subscripts -Warray-bounds=2
 
-override CFLAGS ?= -g
-override CFLAGS += -std=c11 -D_DEFAULT_SOURCE $(WARNINGS)
+override CFLAGS ?= -g -O2 $(WARNINGS)
+override CFLAGS += -std=c11
+override CPPFLAGS ?= -D_FORTIFY_SOURCE=2
 override CPPFLAGS += -Isrc
 override COLMFLAGS += -Isrc/compiler
 
@@ -28,9 +29,9 @@ $(bins): %:
 	$(LINK.c) $(filter %.c %.a,$^) $(LDLIBS) -o $@
 
 src/compiler/compiler.c: src/compiler/expr.lm src/compiler/types.lm
-fspec-compiler-native.a: private CFLAGS = -Wno-unusued-parameter
+fspec-compiler-native.a: private override WARNINGS = -Wno-unusued-parameter
 fspec-compiler-native.a: src/compiler/native.c
-fspec-compiler.a: private override CFLAGS = -std=c11
+fspec-compiler.a: private override WARNINGS =
 fspec-compiler.a: src/compiler/compiler.c fspec-compiler-native.a
 
 fspec-info: private override LDLIBS += -lcolm
@@ -39,7 +40,7 @@ fspec-dump: src/bin/fspec-dump.c
 
 dec2bin: src/bin/misc/dec2bin.c
 
-xidec: private override CFLAGS += -Wno-strict-overflow
+xidec: private override WARNINGS += -Wno-strict-overflow
 xidec: src/bin/xi/xidec.c
 xi2path: src/bin/xi/xi2path.c
 xils: src/bin/xi/xils.c
