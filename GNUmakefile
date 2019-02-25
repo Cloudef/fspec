@@ -29,7 +29,7 @@ $(bins): %:
 	$(LINK.c) $(filter %.c %.a,$^) $(LDLIBS) -o $@
 
 src/compiler/compiler.c: src/compiler/expr.lm src/compiler/types.lm
-fspec-compiler-native.a: private override WARNINGS = -Wno-unusued-parameter
+fspec-compiler-native.a: private override WARNINGS += -Wno-unused-parameter
 fspec-compiler-native.a: src/compiler/native.c
 fspec-compiler.a: private override WARNINGS =
 fspec-compiler.a: src/compiler/compiler.c fspec-compiler-native.a
