@@ -1,12 +1,12 @@
 MAKEFLAGS += --no-builtin-rules
 R2_PLUGIN_PATH ?= $(shell r2 -H R2_USER_PLUGINS)
 
-# GCC 7: -Wstringop-overflow=, -Walloc-size-larger-than=, -Wduplicated-{branches,cond}
 WARNINGS := -Wall -Wextra -Wformat=2 -Wstrict-aliasing=3 -Wstrict-overflow=5 -Wstack-usage=12500 \
 	-Wfloat-equal -Wcast-align -Wpointer-arith -Wchar-subscripts -Warray-bounds=2
 
-override CFLAGS ?= -g
-override CFLAGS += -std=c11 $(WARNINGS)
+override CFLAGS ?= -g -O2 $(WARNINGS)
+override CFLAGS += -std=c11
+override CPPFLAGS ?= -D_FORTIFY_SOURCE=2
 
 libs = asm_fspec.so anal_fspec.so
 all: $(libs)
